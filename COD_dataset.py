@@ -1,7 +1,13 @@
+# @Time    : 2025-11-24 15:51
+# @Author  : Hector Astrom
+# @Email   : hastrom@mit.edu
+# @File    : COD_dataset.py
+
 import os
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from datasets import Dataset, DatasetDict, Features, Image as ImageFeature, ClassLabel, Value
+from reward import CLIPReward
 
 ##################################
 # Dataset Reading
@@ -19,6 +25,10 @@ def get_label_from_filename(filename: str) -> str:
     parts = filename.split('-')
     
     if len(parts) <= LABEL_INDEX:
+         # no longer returning superclass label, because they don't make sense
+         # these None will be filtered out later
+        return None
+    
         # Get next best label at idx 3 - the superclass label
         if len(parts) <= 3:
             raise Exception(f"Malformed file name (too short): {filename}")
@@ -47,7 +57,8 @@ def image_label_generator(split_name: str):
             label_name = get_label_from_filename(filename)
             
             yield {
-                "image": file_path,
+                "image": file_path, # same as image_path for now, but will be decoded to img
+                "image_path": file_path, 
                 "label_name": label_name
             }
         else:
@@ -59,14 +70,15 @@ def load_cod10k_lazy() -> DatasetDict:
     filepaths, which are automatically decoded to images through datasets'
     ImageFeature() schema.
     
-    Cols: 'image', 'label'
+    Cols: 'image', 'label', 'image_path'
     """
     dataset_dict = {}
     
     # schema is info datasets need to load image on demand from filepath
     features_schema = Features({
         "image" : ImageFeature(),
-        "label_name": Value('string')
+        "label_name": Value('string'),
+        "image_path": Value('string')
     })
     
     for split in SPLITS:
@@ -78,6 +90,13 @@ def load_cod10k_lazy() -> DatasetDict:
         dataset_dict[split.lower()] = raw_dataset
         
     raw_datasets = DatasetDict(dataset_dict)
+    
+    # filter out superclasses
+    # takes train dataset from 6000 -> 4190 images
+    raw_datasets = raw_datasets.filter(
+        lambda x: x['label_name'] is not None,
+        num_proc=os.cpu_count() // 2
+    )
     
     # convert str class names to ClassLabel features
     all_labels = set()
@@ -117,7 +136,7 @@ tensor_transform = transforms.Compose([
 def pytorch_transform_fn(examples):
     # examples is a dict of lists: {'image': [PIL, ...], 'label': [0, ...]}
     examples['pixel_values'] = [tensor_transform(img.convert("RGB")) for img in examples['image']]
-    del examples['image'] # ensures we only have 2 cols for loader
+    del examples['image'] # don't need for loader
     return examples
 
 def build_COD_torch_dataset(split_name = 'train'):
@@ -135,11 +154,23 @@ if __name__ == "__main__":
     dataset = build_COD_torch_dataset('train')
     loader = DataLoader(dataset, batch_size=4, num_workers=1, shuffle=True)
     
+    reward_fn = CLIPReward(dataset.all_classes, device=0)
+    
     for item in loader: # dict{'label', 'pixel_values'}
-        img_tensor = item['pixel_values']
-        label_int = item['label']
-        print("Image tensor:", img_tensor.shape)
-        print(img_tensor.min(), img_tensor.max()) # images are [0, 1]
-        print("Labels:", label_int)
-        print("Str labels:", dataset.label2str(label_int))
+        img_tensors = item['pixel_values']
+        label_ints = item['label']
+        image_paths = item['image_path']
+        print("Image tensor:", img_tensors.shape)
+        print(img_tensors.min(), img_tensors.max()) # images are [0, 1]
+        print("Labels:", label_ints)
+        label_str = dataset.label2str(label_ints)
+        print("Str labels:", label_str)
+        
+        print(f"Image paths: {image_paths}")
+        
+        meta = [{'label' : int(i)} for i in label_ints]
+        
+        rewards, _ = reward_fn(img_tensors, prompts=[''] * len(img_tensors), metadata=meta)
+        print(f"Batch reward {rewards}")
+        print(f"Mean reward: {rewards.mean().item()}")
         break
