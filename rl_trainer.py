@@ -4,12 +4,22 @@
 # @File    : rl_trainer.py
 # Run with `accelerate launch rl_trainer.py``
 
+"""
+Goal: Teach a diffusion model to perceptually enhance images of camouflaged
+animals so that it maximizes the classification accuracy of a vision model on
+the image.
+
+Input to RL: x = {Image, Prompt} (which kind of prompt is an open question)
+Output from RL: r(x) = score from CLIP on class "An image of {label}" out of all
+possible labels
+"""
+
+
 from trl import DDPOConfig
 from ddpo import ImageDDPOTrainer, I2IDDPOStableDiffusionPipeline
 from reward import CLIPReward
 from COD_dataset import build_COD_torch_dataset
 from torch.utils.data import DataLoader
-from peft import LoraConfig
 import os
 import torch
 import wandb
@@ -87,7 +97,7 @@ def validation_hook(pipeline, noise_strength, wandb_step):
     # encode & noise (how we start rl)
     with torch.no_grad():
         # .18125 is vae encoding normalization factor
-        init_latents = pipeline.vae.encode(input_image).latent_dist.sample()
+        init_latents = pipeline.vae.encode(vae_input).latent_dist.sample()
         init_latents *= 0.18215
         noise = torch.randn_like(init_latents)
         
