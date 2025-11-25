@@ -11,6 +11,8 @@ from COD_dataset import build_COD_torch_dataset
 from torch.utils.data import DataLoader
 from peft import LoraConfig
 import os
+import torch
+import wandb
 
 ##################################
 # Constants
@@ -20,7 +22,9 @@ GPU_BATCH_SIZE = 8 # limited by VRAM
 # TODO: Play around with what prompt works best! Can't be class dependent
 PROMPT = "A high quality, clear photo"
 NUM_WORKERS = 1
-NOISE_STRENGTH = 0.6 # controls adherance to original image (1.0 = pure noise, 0.0 = no change)
+NOISE_STRENGTH = 0.2 # controls adherance to original image (1.0 = pure noise, 0.0 = no change)
+SAMPLE_NUM_STEPS = 50 # diffusion steps to take
+SAMPLE_BATCHES_PER_EPOCH = 8 # num batches to avg reward on per epoch
 DEVICE = 'cuda'
 
 ##################################
@@ -51,7 +55,8 @@ def create_data_generator(dataloader, prompt):
                 
 
 my_generator = create_data_generator(train_loader, PROMPT) 
-        
+
+
 def my_image_loader():
     """
     Return (prompt_str, image_tensor_chw, metadata_dict)
@@ -59,9 +64,74 @@ def my_image_loader():
     return next(my_generator)
 
 ##################################
+# Build image hook
+##################################
+
+# get fixed validation sample to use for hook
+val_prompt, val_image, val_meta = next(my_generator)
+val_image = val_image.unsqueeze(0) # (1, C, H, W)
+
+def validation_hook(pipeline, noise_strength, wandb_step):
+    """
+    Runs validation image through pipeline, logging before and after diffusion
+    """
+    pipeline.vae.eval()
+    pipeline.unet.eval()
+    
+    device = DEVICE
+    input_image = val_image.to(device=device, dtype=pipeline.vae.dtype)
+    # convert [0, 1] -> [-1, 1] for VAE
+    vae_input = 2.0 * input_image - 1.0
+    
+    # encode & noise (how we start rl)
+    with torch.no_grad():
+        # .18125 is vae encoding normalization factor
+        init_latents = pipeline.vae.encode(input_image).latent_dist.sample()
+        init_latents *= 0.18215
+        noise = torch.randn_like(init_latents)
+        
+        # calculate start step from noise_strength
+        timesteps = torch.tensor([int(1000 * noise_strength)], device=device).long()
+        noisy_latents = pipeline.scheduler.add_noise(init_latents, noise, timesteps)
+        
+        # denoise
+        prompt_ids = pipeline.tokenizer(
+            [val_prompt], 
+            return_tensors="pt", 
+            padding="max_length", 
+            truncation=True, 
+            max_length=77
+        ).input_ids.to(device)
+        
+        prompt_embeds = pipeline.text_encoder(prompt_ids)[0] # take first? why 0?
+        neg_prompt_embeds = torch.zeros_like(prompt_embeds)
+        
+        output = pipeline(
+            prompt_embeds=prompt_embeds,
+            negative_prompt_embeds=neg_prompt_embeds,
+            num_inference_steps = 50, # high for visualization quality
+            guidance_scale = 7.0,
+            output_type="pil",
+            latents=noisy_latents,
+            starting_step_ratio=noise_strength
+        )
+        
+        after_img = output.images[0]
+    
+    # prepare before image
+    # (H, W, C) - this should be in [0, 1] range by default so might be overkill
+    before_img = input_image.clone().detach().cpu().squeeze(0).permute(1, 2, 0).numpy()
+    wandb.log({
+        "validation/before_vs_after": [
+            wandb.Image(before_img, caption=f"Before (Label: {val_meta['label_str']})"),
+            wandb.Image(after_img, caption=f"After (RL Process)")
+        ]
+    }, step=wandb_step)
+
+##################################
 # Define reward
 ##################################
-reward_fn = CLIPReward(class_names=dataset.all_classes, device=0)
+reward_fn = CLIPReward(class_names=dataset.all_classes, device=DEVICE)
 
 
 ##################################
@@ -77,10 +147,9 @@ config = DDPOConfig(
     # --- Sampling (Experience Collection) ---
     # Total samples per epoch = batch_size * num_batches * num_processes.
     # RL requires a decent "buffer" of experiences to learn effectively.
-    # A batch size of 4 fits comfortably on 24GB VRAM with SD 1.5.
-    sample_num_steps=10, # 50,
+    sample_num_steps=SAMPLE_NUM_STEPS,
     sample_batch_size=GPU_BATCH_SIZE,           
-    sample_num_batches_per_epoch=2, # 8, # 4 * 8 = 32 samples per epoch (per GPU). Good balance.
+    sample_num_batches_per_epoch=SAMPLE_BATCHES_PER_EPOCH, # steps * num batches = total samples / epoch
     
     # --- Training (Update Phase) ---
     train_batch_size=GPU_BATCH_SIZE,       # Must be <= sample_batch_size
@@ -109,12 +178,13 @@ config = DDPOConfig(
     tracker_project_name="67960-ddpo-classifier-optimization",
 )
 
+# looks right: https://github.com/huggingface/trl/pull/1165
+# TODO: tune these
 lora_config = LoraConfig(
-    task_type='CAUSAL_LM',
-    r=8,
-    lora_alpha=16,
-    bias="none",
-    target_modules=["to_k", "to_q", "to_v", "to_out.0"] # for UNet TODO: verify
+    r=4,
+    lora_alpha=4,
+    init_lora_weights="gaussian",
+    target_modules=["to_k", "to_q", "to_v", "to_out.0"] 
 )
 
 pipeline = I2IDDPOStableDiffusionPipeline(
@@ -127,16 +197,15 @@ trainer = ImageDDPOTrainer(
     reward_function=reward_fn,
     prompt_function=my_image_loader, # custom prompt function to send images
     sd_pipeline=pipeline,
-    noise_strength=NOISE_STRENGTH
+    noise_strength=NOISE_STRENGTH,
+    debug_hook=validation_hook
 )
 
 ##################################
 # Fix accelerate save_state bug
 ##################################
-# 1. Capture the original method
 original_save_state = trainer.accelerator.save_state
 
-# 2. Define a wrapper that forces a default output_dir
 def patched_save_state(output_dir=None, **kwargs):
     if output_dir is None:
         # Force the path if it's missing
@@ -147,9 +216,7 @@ def patched_save_state(output_dir=None, **kwargs):
     
     return original_save_state(output_dir=output_dir, **kwargs)
 
-# 3. Apply the patch to the live object
 trainer.accelerator.save_state = patched_save_state
-print(f"DEBUG: Monkey-patched accelerator.save_state to force output_dir='{config.project_kwargs['project_dir']}'")
 
 
 ##################################

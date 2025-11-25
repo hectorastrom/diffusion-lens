@@ -380,11 +380,17 @@ class I2IDDPOStableDiffusionPipeline(DefaultDDPOStableDiffusionPipeline):
 # ==========================================
 
 class ImageDDPOTrainer(DDPOTrainer):
-    def __init__(self, *args, noise_strength=0.6, **kwargs):
+    def __init__(self, *args, noise_strength=0.2, debug_hook=None, **kwargs):
         self.noise_strength = noise_strength
+        self.debug_hook = debug_hook
         super().__init__(*args, **kwargs)
             
     def _generate_samples(self, iterations, batch_size):
+        current_step = self.state.global_step # for wandb sync
+        # Run hook to visualize samples each sampling iteration
+        if self.debug_hook is not None and self.accelerator.is_main_process:
+            self.debug_hook(self.sd_pipeline, self.noise_strength, self.state.global_step)
+        
         samples = []
         prompt_image_pairs = []
 
@@ -401,6 +407,9 @@ class ImageDDPOTrainer(DDPOTrainer):
             input_images = torch.stack(input_images).to(
                 self.accelerator.device, dtype=self.sd_pipeline.vae.dtype
             )
+            
+            # Normalize to [-1, 1] for VAE from [0, 1] range of PIL images
+            input_images = 2.0 * input_images - 1.0
 
             # Tokenize prompts
             prompt_ids = self.sd_pipeline.tokenizer(
