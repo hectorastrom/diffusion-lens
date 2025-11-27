@@ -87,10 +87,25 @@ class CLIPReward:
 
             # 5. Gather specific label confidence
             labels = labels.to(logits.device)
-            rewards = logits[torch.arange(batch_size, device=logits.device), labels].to(torch.float32)
+            target_logits = logits[torch.arange(batch_size, device=logits.device), labels].to(torch.float32)
             
-            # clipping logits
-            rewards = torch.clamp(rewards, -50, 50)
+            # 6. Compute delta from max other logit (strongest competitor)
+            # mask out correct labels to find max of incorrect ones
+            mask = torch.ones_like(logits, dtype=torch.bool) # tensor of True
+            mask[torch.arange(batch_size), labels] = False
+            
+            # logits[mask] is simply a list we have to rearrange
+            other_logits = logits[mask].view(batch_size, -1) 
+            max_other_logits, _ = other_logits.max(dim=1) # discard idx
+            
+            rewards = target_logits-max_other_logits
+            
+            # TODO: investigate if we need to scale down rewards. massive
+            # rewards are often not helpful for RL
+            # seems like rewards range from -4 to 4, which feels like a good range
+            
+            # 7. clipping logits
+            rewards = torch.clamp(rewards, -10.0, 10.0)
             if torch.isnan(rewards).any():
                 rewards = torch.nan_to_num(rewards, nan=0.0)
 
