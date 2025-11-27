@@ -37,9 +37,12 @@ NOISE_STRENGTH = 0.2 # controls adherance to original image (1.0 = pure noise, 0
 SAMPLE_NUM_STEPS = 50 # diffusion steps to take
 
 LOADER_BATCH_SIZE = 16 # limited by CPU - faster to fetch many at once
-GPU_BATCH_SIZE = 6 # limited by VRAM
-GRAD_ACCUM_STEPS = 10 # pseudo batch size (one averaged grad update) = 6 * 10 = 60
-SAMPLE_BATCHES_PER_EPOCH = 260 # num batches to avg reward on per epoch: want 256 total
+# TODO: correct so grad_accum steps * gpu_batch_size = 64, and
+# sample_batches_per_epoch * 64 = 256 (this matches the paper)
+
+GPU_BATCH_SIZE = 4 # limited by VRAM
+GRAD_ACCUM_STEPS = 2 # pseudo batch size (one averaged grad update) =  * 10 = 60
+SAMPLE_BATCHES_PER_EPOCH = 2 # num batches to avg reward on per epoch
 
 EPOCHS = 500
 DEVICE = 'cuda'
@@ -96,34 +99,44 @@ if __name__ == "__main__":
     ##################################
     # Build image hook
     ##################################
-    # get fixed validation sample to use for hook
+    # 1. Get fixed validation sample
     val_prompt, val_image, val_meta = next(my_generator)
     val_image = val_image.unsqueeze(0) # (1, C, H, W)
 
+    # 2. Calculate "Before" Reward
+    with torch.no_grad():
+        val_image_device = val_image.to(DEVICE)
+        # Reward fn expects lists for prompts/meta
+        init_rewards, _ = reward_fn(val_image_device, [val_prompt], [val_meta])
+        val_before_reward = init_rewards[0].item()
+
+    # 3. Prepare "Before" image for WandB (Numpy format)
+    val_before_img_vis = val_image.clone().squeeze(0).permute(1, 2, 0).cpu().numpy()
+
     def validation_hook(pipeline, noise_strength, wandb_step):
         """
-        Runs validation image through pipeline, logging before and after diffusion
+        Runs validation image through pipeline, logging before and after diffusion.
+        Uses cached reward for the input image.
         """
         pipeline.vae.eval()
         pipeline.unet.eval()
         
         device = DEVICE
         input_image = val_image.to(device=device, dtype=pipeline.vae.dtype)
-        # convert [0, 1] -> [-1, 1] for VAE
+        
+        # NOTE: Ensure input_image is [0, 1] before doing this. 
+        # If your dataset outputs [-1, 1], remove the "2.0 * ... - 1.0"
         vae_input = 2.0 * input_image - 1.0
         
-        # encode & noise (how we start rl)
+        # encode & noise
         with torch.no_grad():
-            # .18125 is vae encoding normalization factor
             init_latents = pipeline.vae.encode(vae_input).latent_dist.sample()
             init_latents *= 0.18215
             noise = torch.randn_like(init_latents)
             
-            # calculate start step from noise_strength
             timesteps = torch.tensor([int(1000 * noise_strength)], device=device).long()
             noisy_latents = pipeline.scheduler.add_noise(init_latents, noise, timesteps)
             
-            # denoise
             prompt_ids = pipeline.tokenizer(
                 [val_prompt], 
                 return_tensors="pt", 
@@ -132,38 +145,35 @@ if __name__ == "__main__":
                 max_length=77
             ).input_ids.to(device)
             
-            prompt_embeds = pipeline.text_encoder(prompt_ids)[0] # take first? why 0?
+            prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
             neg_prompt_embeds = torch.zeros_like(prompt_embeds)
             
             output = pipeline(
                 prompt_embeds=prompt_embeds,
                 negative_prompt_embeds=neg_prompt_embeds,
-                num_inference_steps = 50, # high for visualization quality
-                guidance_scale = 7.0,
+                num_inference_steps=50,
+                guidance_scale=7.0,
                 output_type="pil",
                 latents=noisy_latents,
                 starting_step_ratio=noise_strength
             )   
             
-            after_img = output.images[0] # (H, W, C)
+            after_img_pil = output.images[0]
         
-        
-        # pixels go up to 255 -> want them at 0 to 1
-        after_img_tensor = torch.from_numpy(np.array(after_img)).permute(2, 0, 1).unsqueeze(0).float() / 255.0
+        # Convert PIL -> Tensor (1, C, H, W) for reward calculation
+        after_img_tensor = torch.from_numpy(np.array(after_img_pil)).permute(2, 0, 1).unsqueeze(0).float() / 255.0
+        after_img_tensor = after_img_tensor.to(device)
     
-        # Calculate the reward on the *after* image
-        # reward_fn expects a (B, C, H, W) tensor, and metadata as a list of dicts
-        val_reward, _ = reward_fn(after_img_tensor, [val_prompt], [val_meta])
-        val_reward = val_reward.item()
-        
-        # prepare before image
-        # (H, W, C) - this should be in [0, 1] range by default so might be overkill
-        before_img = input_image.clone().detach().cpu().squeeze(0).permute(1, 2, 0).numpy()
+        # Calculate the reward ONLY for the after image
+        rewards, _ = reward_fn(after_img_tensor, [val_prompt], [val_meta])
+        after_reward = rewards[0].item()
         
         wandb.log({
             "validation/before_vs_after": [
-                wandb.Image(before_img, caption=f"Before (Label: {val_meta['label_str']})"),
-                wandb.Image(after_img, caption=f"After (RL, prompt='{val_prompt}', r={val_reward:.4f})")
+                # Use cached numpy image and cached reward
+                wandb.Image(val_before_img_vis, caption=f"Before (label='{val_meta['label_str']}', r={val_before_reward:.4f})"),
+                # Use new PIL image and new reward
+                wandb.Image(after_img_pil, caption=f"After (RL, prompt='{val_prompt}', r={after_reward:.4f})")
             ]
         }, step=wandb_step)
 
@@ -177,6 +187,9 @@ if __name__ == "__main__":
         log_with= "wandb",               # Highly recommended to visualize the Reward curve
         mixed_precision="fp16",         # Standard for SD 1.5
         allow_tf32=True,
+        
+        # Let's not leave eta up to chance (should default to 1.0 tho)
+        sample_eta = 1.0,
         
         # --- Sampling (Experience Collection) ---
         # Total samples per epoch = batch_size * num_batches * num_processes.

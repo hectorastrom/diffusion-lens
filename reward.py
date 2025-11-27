@@ -47,7 +47,7 @@ class CLIPReward:
         """
         Args:
             images: (B, C, H, W) Tensor, values [0, 1] (Standard SD Output)
-            prompts: List of strings (Ignored here)
+            prompts: List of strings (THIS IS IGNORED! Not relevant to reward)
             metadata: List of dicts containing 'label' (Integer)
             
         Returns:
