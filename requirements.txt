@@ -1,3 +1,4 @@
+# run with uv pip install -r requirements.txt --index-strategy unsafe-best-match
 --extra-index-url https://download.pytorch.org/whl/cu130 
 
 torch 
