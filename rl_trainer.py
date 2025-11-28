@@ -48,7 +48,7 @@ OVERFIT_DSET_SIZE = 1000 # num samples to use for testing a small dataset
 
 # NOTE: The actual number of diffusion steps take is noise_strength *
 # sample_num_steps
-NOISE_STRENGTH = 0.2 # controls adherance to original image (1.0 = pure noise, 0.0 = no change)
+NOISE_STRENGTH = 0.5 # controls adherance to original image (1.0 = pure noise, 0.0 = no change)
 SAMPLE_NUM_STEPS = 50 # diffusion steps to take
 USE_PER_PROMPT_STATTRACKING = True
 
@@ -262,7 +262,7 @@ if __name__ == "__main__":
         
         # --- Optimizer & LoRA Specifics ---
         # LoRA usually requires a slightly lower LR than full finetuning. 
-        train_learning_rate=1e-5, # paper used 1e-5
+        train_learning_rate=1e-6, # paper used 1e-5
         train_use_8bit_adam=True,    
         
         # --- Critical for Image-to-Image ---
@@ -315,6 +315,7 @@ if __name__ == "__main__":
     ##################################
     # Begin training!
     ##################################
+    accelerator.free_memory()
     if accelerator.is_main_process:
         print("Commencing training!")
     trainer.train()
