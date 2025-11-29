@@ -112,7 +112,7 @@ def load_cod10k_lazy() -> DatasetDict:
         sample['label'] = class_feature.str2int(sample['label_name'])
         return sample
     
-    print("Encoding labels...")
+    # turns labels from strings to ints
     raw_datasets = raw_datasets.map(encode_labels)
     
     # imgs remain untouched, and are decoded from filepaths JIT
@@ -146,7 +146,23 @@ def build_transform(image_size):
 
     return pytorch_transform_fn
 
-def build_COD_torch_dataset(split_name = 'train', image_size=512):
+def build_COD_torch_dataset(split_name : str = 'train', image_size : int = 512):
+    """
+    Returns the torch COD dataset from desired split (default 'train').
+    
+    Inputs:
+        - split_name : str = 'train' | 'test' 
+        - image_size : int = 512
+        
+    Output:
+        - huggingface datasets.Dataset with tensor transform applied
+            - Iterating through this dataset yields item with cols:
+              ['pixel_values', 'label', and 'image_path']
+              
+    Note that two augmentations are applied by default: horizontal flips and
+    color jitters.
+    """
+    assert split_name in ('train', 'test'), "ERROR: Invalid split name"
     dataset = load_cod10k_lazy()[split_name]
     dataset.set_transform(build_transform(image_size=image_size))
     

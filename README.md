@@ -39,3 +39,11 @@ aws s3 cp ddpo_logs/{TIMESTAMP}/checkpoints s3://hectorastrom-dl-final/checkpoin
 - clip_visualizer.py - image visualization from dataset to ensure our dataset
   object works
 
+
+## Dev Notes
+- After `toTensor()` transform in `build_COD_torch_dataset`, the previously PIL
+  images are now tensors `(C, H, W)` with pixel values `[0, 1]`
+  - In val hook, we explicitly divide by `255.0` because we're doing a manual
+    conversion from PIL (output of pipeline) to tensor (note, you can just set
+    `pipeline.output_type='pt'` to avoid this, but in this case we needed the
+    PIL image to render for wandb)
