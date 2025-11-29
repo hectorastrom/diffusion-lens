@@ -314,7 +314,8 @@ if __name__ == "__main__":
                 prompt_embeds=prompt_embeds,
                 negative_prompt_embeds=neg_prompt_embeds,
                 num_inference_steps=50,
-                guidance_scale=7.0,
+                # disable guidance on null or id only prompt
+                guidance_scale=7.0 if args.prompt != "" else 0.0, 
                 output_type="pil",
                 latents=noisy_latents,
                 starting_step_ratio=noise_strength
@@ -393,6 +394,8 @@ if __name__ == "__main__":
         tracker_project_name="67960-ddpo-classifier-optimization",
     )
 
+    # Had to build our own I2I pipeline to gain access to intermediate latents
+    # and logprobs, needed policy gradient optimization in ImageDDPOTrainer
     pipeline = I2IDDPOStableDiffusionPipeline(
         pretrained_model_name="stable-diffusion-v1-5/stable-diffusion-v1-5",
         use_lora=True, # only thing you need to enable LoRA (see pipeline class definition)
