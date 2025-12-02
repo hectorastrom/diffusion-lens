@@ -404,7 +404,6 @@ class GradientCamouflageTrainer:
             pin_memory=True,
         )
         
-        # Setup logging
         run_name = datetime.now().strftime("%Y%m%d-%H%M%S")
         save_dir = f"./gradient_logs/{run_name}"
         os.makedirs(save_dir, exist_ok=True)
@@ -439,7 +438,6 @@ class GradientCamouflageTrainer:
                 images = batch["pixel_values"].to(self.device)
                 labels = batch["label"].to(self.device)
                 
-                # Build prompts
                 if use_oracle_prompt:
                     prompts = [
                         f"A clear photo of {dataset.label2str(l.item())}" 
@@ -448,7 +446,6 @@ class GradientCamouflageTrainer:
                 else:
                     prompts = [""] * len(labels)
                 
-                # Forward pass with mixed precision
                 with autocast():
                     loss, accuracy, generated, preds = self.forward(
                         images=images,
@@ -460,17 +457,14 @@ class GradientCamouflageTrainer:
                     )
                     loss = loss / gradient_accumulation_steps
                 
-                # Backward pass
                 scaler.scale(loss).backward()
                 
-                # Optimizer step (with gradient accumulation)
                 if (batch_idx + 1) % gradient_accumulation_steps == 0:
                     scaler.step(optimizer)
                     scaler.update()
                     optimizer.zero_grad()
                     global_step += 1
                 
-                # Track metrics
                 epoch_loss += loss.item() * gradient_accumulation_steps
                 epoch_acc += accuracy.item()
                 num_batches += 1
@@ -506,7 +500,6 @@ class GradientCamouflageTrainer:
                     
                     wandb.log(log_dict, step=global_step)
             
-            # End of epoch
             avg_loss = epoch_loss / num_batches
             avg_acc = epoch_acc / num_batches
             
@@ -519,14 +512,12 @@ class GradientCamouflageTrainer:
                     "epoch/accuracy": avg_acc,
                 }, step=global_step)
             
-            # Save checkpoint
             if (epoch + 1) % save_every == 0:
                 ckpt_dir = os.path.join(save_dir, f"epoch{epoch+1}")
                 os.makedirs(ckpt_dir, exist_ok=True)
                 self.unet.save_pretrained(ckpt_dir)
                 print(f"Saved checkpoint: {ckpt_dir}")
         
-        # Final save
         final_dir = os.path.join(save_dir, "final")
         os.makedirs(final_dir, exist_ok=True)
         self.unet.save_pretrained(final_dir)
@@ -583,23 +574,19 @@ def main():
     print("=" * 60)
     print(f"Config: {vars(args)}\n")
     
-    # Build dataset
     print("Loading COD10K dataset...")
     dataset = build_COD_torch_dataset("train", image_size=args.image_size)
     
     if args.overfit_size > 0:
         dataset = Subset(dataset, range(min(args.overfit_size, len(dataset))))
-        # Preserve metadata on subset
         dataset.all_classes = dataset.dataset.all_classes
         dataset.label2str = dataset.dataset.label2str
         print(f"Using subset of {len(dataset)} samples for overfitting test")
     else:
         print(f"Using full dataset: {len(dataset)} samples")
     
-    # Initialize trainer
     trainer = GradientCamouflageTrainer()
     
-    # Train
     trainer.train(
         dataset=dataset,
         num_epochs=args.epochs,
