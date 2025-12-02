@@ -10,6 +10,9 @@ datasets/*
 outputs/*
 wandb
 ddpo_logs
+gradient_logs
+kevin_scripts
 
 # Virtual environments
 .venv
+
