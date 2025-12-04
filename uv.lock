@@ -381,7 +381,7 @@ requires-dist = [
     { name = "torchvision", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=0.24.1" },
     { name = "torchvision", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = ">=0.24.1", index = "https://download.pytorch.org/whl/cu130" },
     { name = "transformers", specifier = ">=4.57.3" },
-    { name = "trl", specifier = "==0.21.0" },
+    { name = "trl", specifier = "~=0.21.0" },
     { name = "wandb", specifier = ">=0.23.1" },
 ]
 
