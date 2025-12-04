@@ -362,7 +362,7 @@ class GradientCamouflageTrainer:
         noise_strength: float = 0.4,
         num_steps: int = 20,
         guidance_scale: float = 7.5,
-        use_oracle_prompt: bool = True,
+        prompt: str = None,
         dataset=None,
     ) -> dict:
         """
@@ -381,11 +381,13 @@ class GradientCamouflageTrainer:
                 images = batch["pixel_values"].to(self.device)
                 labels = batch["label"].to(self.device)
                 
-                if use_oracle_prompt:
+                if prompt == "ORACLE":
                     prompts = [
                         f"A clear photo of {dataset.label2str(l.item())}" 
                         for l in labels
                     ]
+                elif prompt is not None:
+                    prompts = [prompt] * len(labels)
                 else:
                     prompts = [""] * len(labels)
                 
@@ -423,11 +425,13 @@ class GradientCamouflageTrainer:
         noise_strength: float = 0.4,
         num_steps: int = 20,
         guidance_scale: float = 7.5,
-        use_oracle_prompt: bool = True,
+        prompt: str = None,
         gradient_accumulation_steps: int = 8,
         save_every: int = 10,
         val_every: int = 100,
         log_wandb: bool = True,
+        image_size: int = 512,
+        overfit_size: int = -1,
     ):
         """
         Main training loop.
@@ -441,7 +445,7 @@ class GradientCamouflageTrainer:
             noise_strength: I2I noise strength (0.4 = modify last 40%)
             num_steps: Diffusion steps (fewer = faster, less quality)
             guidance_scale: CFG scale
-            use_oracle_prompt: If True, use ground-truth label in prompt
+            prompt: Prompt for diffusion model. If "ORACLE", uses ground-truth label. If None, uses empty prompt.
             gradient_accumulation_steps: Effective batch = batch_size * this
             save_every: Save checkpoint every N epochs
             val_every: Run validation every N optimizer steps
@@ -482,19 +486,40 @@ class GradientCamouflageTrainer:
         os.makedirs(save_dir, exist_ok=True)
         
         if log_wandb:
+            wandb_config = {
+                # Training hyperparameters
+                "lr": lr,
+                "batch_size": batch_size,
+                "gradient_accumulation_steps": gradient_accumulation_steps,
+                "effective_batch": batch_size * gradient_accumulation_steps,
+                "num_epochs": num_epochs,
+                
+                # Diffusion parameters
+                "noise_strength": noise_strength,
+                "num_steps": num_steps,
+                "guidance_scale": guidance_scale,
+                
+                # Dataset parameters
+                "image_size": image_size,
+                "train_dataset_size": len(dataset),
+                "overfit_size": overfit_size if overfit_size > 0 else None,
+                "val_dataset_size": len(val_dataset) if val_dataset is not None else None,
+                
+                # Prompt settings
+                "prompt": prompt if prompt is not None else "empty",
+                
+                # Training settings
+                "save_every": save_every,
+                "val_every": val_every,
+                
+                # Model architecture
+                "lora_rank": 4,
+                "lora_alpha": 4,
+            }
             wandb.init(
                 project="camouflage-gradient",
                 name=run_name,
-                config={
-                    "lr": lr,
-                    "batch_size": batch_size,
-                    "effective_batch": batch_size * gradient_accumulation_steps,
-                    "noise_strength": noise_strength,
-                    "num_steps": num_steps,
-                    "guidance_scale": guidance_scale,
-                    "use_oracle_prompt": use_oracle_prompt,
-                    "lora_rank": 4,
-                }
+                config=wandb_config
             )
         
         global_step = 0
@@ -515,11 +540,13 @@ class GradientCamouflageTrainer:
                 images = batch["pixel_values"].to(self.device)
                 labels = batch["label"].to(self.device)
                 
-                if use_oracle_prompt:
+                if prompt == "ORACLE":
                     prompts = [
                         f"A clear photo of {dataset.label2str(l.item())}" 
                         for l in labels
                     ]
+                elif prompt is not None:
+                    prompts = [prompt] * len(labels)
                 else:
                     prompts = [""] * len(labels)
                 
@@ -584,7 +611,7 @@ class GradientCamouflageTrainer:
                             noise_strength=noise_strength,
                             num_steps=num_steps,
                             guidance_scale=guidance_scale,
-                            use_oracle_prompt=use_oracle_prompt,
+                            prompt=prompt,
                             dataset=val_dataset,
                         )
                         print(f"\n[Step {global_step}] Validation - Loss: {val_metrics['val/loss']:.4f}, Acc: {100*val_metrics['val/accuracy']:.1f}%\n")
@@ -626,7 +653,7 @@ class GradientCamouflageTrainer:
                         noise_strength=noise_strength,
                         num_steps=num_steps,
                         guidance_scale=guidance_scale,
-                        use_oracle_prompt=use_oracle_prompt,
+                        prompt=prompt,
                         dataset=val_dataset,
                     )
                     print(f"Epoch {epoch+1} Validation - Loss: {val_metrics['val/loss']:.4f}, Acc: {100*val_metrics['val/accuracy']:.1f}%\n")
@@ -677,10 +704,8 @@ def parse_args():
     parser.add_argument("--image_size", type=int, default=512)
     
     # Prompts
-    parser.add_argument("--use_oracle_prompt", action="store_true", default=True,
-                        help="Use ground-truth label in prompt")
-    parser.add_argument("--no_oracle_prompt", dest="use_oracle_prompt", 
-                        action="store_false")
+    parser.add_argument("--prompt", type=str, default=None,
+                        help='Prompt for diffusion model. Use "ORACLE" for ground-truth label, or provide custom prompt. If not set, uses empty prompt.')
     
     # Logging
     parser.add_argument("--no_wandb", action="store_true",
@@ -729,11 +754,13 @@ def main():
         noise_strength=args.noise_strength,
         num_steps=args.num_steps,
         guidance_scale=args.guidance_scale,
-        use_oracle_prompt=args.use_oracle_prompt,
+        prompt=args.prompt,
         gradient_accumulation_steps=args.gradient_accumulation,
         save_every=args.save_every,
         val_every=args.val_every,
         log_wandb=not args.no_wandb,
+        image_size=args.image_size,
+        overfit_size=args.overfit_size,
     )
 
 
