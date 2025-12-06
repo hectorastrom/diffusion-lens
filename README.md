@@ -1,11 +1,10 @@
-Playing around with diffusion, clip, and RL.
-
-Exploration-phase of 6.7960 final project.
+# Diffusion Lens
+Making hidden objects classifier-legible through diffusion.
 
 ## Setup
-- Install requirements using command in requirements.txt
-  - Ensure you're using `uv` with a `venv`
-- Download dataset from instructions in dataset/README.md
+- Ensure you're using `uv` with a `venv`
+- Install requirements from `pyproject.toml` using `uv sync`
+- Download dataset from instructions in `dataset/README.md`
 - Configure accelerate with `accelerate config` - default options are fine
   - If using multi-gpu training, make sure to select the # gpus
 - Launch RL DDPO loop with `accelerate launch rl_trainer.py`
