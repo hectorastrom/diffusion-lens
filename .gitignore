@@ -16,3 +16,4 @@ kevin_scripts
 # Virtual environments
 .venv
 
+eval_outputs/
