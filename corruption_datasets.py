@@ -19,6 +19,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.models import ResNet50_Weights, resnet50
+from tqdm import tqdm
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
@@ -257,7 +258,7 @@ def evaluate_classifier(
     total_correct = 0
     total = 0
 
-    for batch in dataloader:
+    for batch in tqdm(dataloader, desc="Evaluating classifier", leave=False):
         images = batch["pixel_values"].to(device)
         labels = batch["label"].to(device)
 

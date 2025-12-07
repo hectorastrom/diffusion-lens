@@ -145,10 +145,48 @@ def parse_args():
     
     # Dataset and Trainer Constants
     parser.add_argument(
-        "--prompt", 
-        type=str, 
-        default="", 
+        "--mode",
+        type=str,
+        choices=["rl", "eval_classifier"],
+        default="rl",
+        help="Run full RL with diffusion (rl) or just classifier eval (eval_classifier).",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        choices=["cod", "cifar10-c", "cifar100-c", "tiny-imagenet-c"],
+        default="cod",
+        help="Which dataset to use for RL training.",
+    )
+    parser.add_argument(
+        "--data_root",
+        type=str,
+        default="./datasets",
+        help="Root directory containing datasets (for CIFAR/Tiny-ImageNet-C).",
+    )
+    parser.add_argument(
+        "--corruption",
+        type=str,
+        default=None,
+        help="Corruption name for CIFAR-C / Tiny-ImageNet-C (e.g., gaussian_noise, fog).",
+    )
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default="",
         help="The prompt template to use ('ORACLE' uses the ground-truth label)."
+    parser.add_argument(
+        "--severity",
+        type=int,
+        default=1,
+        help="Corruption severity (1-5) for CIFAR-C / Tiny-ImageNet-C.",
+    )
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default="",
+        help="The prompt template to use ('ORACLE' uses the ground-truth label).",
+>>>>>>> e3cf566 (Wrap eval into trainer script):rl_trainer.py
     )
     parser.add_argument(
         "--reward_variant", 
@@ -265,7 +303,185 @@ SAMPLE_BATCHES_PER_EPOCH = max(GRAD_ACCUM_STEPS, 4)
 
 DEVICE = accelerator.device
 
+def build_sd_transform(image_size: int):
+    # Keep images in [0, 1] for SD; classifier reward will normalize internally.
+    return transforms.Compose(
+        [
+            transforms.Resize((image_size, image_size), antialias=True),
+            transforms.ToTensor(),
+        ]
+    )
+
+
+def resolve_label_str_fn(dataset_name: str, tiny_dataset=None):
+    if dataset_name == "CIFAR-10-C":
+        return lambda idx: CIFAR10_LABELS[idx]
+    if dataset_name == "CIFAR-100-C":
+        return lambda idx: str(idx)
+    if dataset_name == "Tiny-ImageNet-C" and tiny_dataset is not None:
+        return lambda idx: tiny_dataset.idx_to_class[idx]
+    return lambda idx: str(idx)
+
+
+def build_data_and_reward(accelerator: Accelerator):
+    device = accelerator.device
+    sd_transform = build_sd_transform(args.image_size)
+
+    if args.dataset == "cod":
+        dataset = build_COD_torch_dataset("train", image_size=args.image_size)
+        label2str = dataset.label2str
+
+        reward_fn = CLIPReward(
+            class_names=dataset.all_classes,
+            device=device,
+            reward_variant=args.reward_variant,
+            model_name=args.clip_variant,
+            lpips_weight=args.lpips_weight,
+        )
+    elif args.dataset in ("cifar10-c", "cifar100-c"):
+        dataset_name = "CIFAR-10-C" if args.dataset == "cifar10-c" else "CIFAR-100-C"
+        if args.corruption is None:
+            raise ValueError("--corruption is required for CIFAR-C datasets")
+
+        dataset = CIFARCorruptionDataset(
+            root=args.data_root,
+            corruption=args.corruption,
+            severity=args.severity,
+            dataset_name=dataset_name,
+            transform=sd_transform,
+        )
+        num_classes = 10 if args.dataset == "cifar10-c" else 100
+        label2str = resolve_label_str_fn(dataset_name)
+
+        classifier, _ = build_resnet50_classifier(
+            num_classes=num_classes,
+            pretrained=not args.no_classifier_pretrained,
+            freeze_backbone=args.classifier_freeze_backbone,
+            device=device,
+        )
+        reward_fn = ClassifierReward(
+            classifier=classifier,
+            device=device,
+            reward_variant=args.reward_variant,
+        )
+    elif args.dataset == "tiny-imagenet-c":
+        if args.corruption is None:
+            raise ValueError("--corruption is required for Tiny-ImageNet-C")
+
+        tiny_root = Path(args.data_root) / "Tiny-ImageNet-C"
+        dataset = TinyImageNetCorruptionDataset(
+            root=tiny_root,
+            corruption=args.corruption,
+            severity=args.severity,
+            transform=sd_transform,
+        )
+        label2str = resolve_label_str_fn("Tiny-ImageNet-C", tiny_dataset=dataset)
+
+        classifier, _ = build_resnet50_classifier(
+            num_classes=200,
+            pretrained=not args.no_classifier_pretrained,
+            freeze_backbone=args.classifier_freeze_backbone,
+            device=device,
+        )
+        reward_fn = ClassifierReward(
+            classifier=classifier,
+            device=device,
+            reward_variant=args.reward_variant,
+        )
+    else:
+        raise ValueError(f"Unknown dataset choice: {args.dataset}")
+
+    train_dataset = dataset
+    if args.overfit_dset_size > 0:
+        train_dataset = Subset(dataset, torch.arange(args.overfit_dset_size))
+        if accelerator.is_main_process:
+            print(f"Using overfit dataset of size: {args.overfit_dset_size}")
+    else:
+        if accelerator.is_main_process:
+            print("Using full training dataset.")
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.loader_batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+    )
+    train_loader = accelerator.prepare(train_loader)
+
+    return dataset, label2str, reward_fn, train_loader
+
+
+def run_classifier_eval() -> None:
+    """Pure classifier evaluation on the chosen corruption dataset.
+
+    Uses the same dataset/transform/classifier construction as RL mode, but
+    bypasses diffusion and just reports CE loss and accuracy.
+    """
+    from corruption_datasets import evaluate_classifier
+
+    # Rebuild data/reward, but we only care about the underlying dataset here.
+    device = DEVICE
+    sd_transform = build_sd_transform(args.image_size)
+
+    if args.dataset in ("cifar10-c", "cifar100-c"):
+        dataset_name = "CIFAR-10-C" if args.dataset == "cifar10-c" else "CIFAR-100-C"
+        if args.corruption is None:
+            raise ValueError("--corruption is required for CIFAR-C datasets")
+        dataset = CIFARCorruptionDataset(
+            root=args.data_root,
+            corruption=args.corruption,
+            severity=args.severity,
+            dataset_name=dataset_name,
+            transform=sd_transform,
+        )
+        num_classes = 10 if args.dataset == "cifar10-c" else 100
+    elif args.dataset == "tiny-imagenet-c":
+        if args.corruption is None:
+            raise ValueError("--corruption is required for Tiny-ImageNet-C")
+        tiny_root = Path(args.data_root) / "Tiny-ImageNet-C"
+        dataset = TinyImageNetCorruptionDataset(
+            root=tiny_root,
+            corruption=args.corruption,
+            severity=args.severity,
+            transform=sd_transform,
+        )
+        num_classes = 200
+    else:
+        raise ValueError("Classifier eval mode is only supported for CIFAR-C and Tiny-ImageNet-C datasets")
+
+    loader = DataLoader(
+        dataset,
+        batch_size=min(args.loader_batch_size, 64),
+        shuffle=False,
+        num_workers=args.num_workers,
+    )
+
+    classifier, _ = build_resnet50_classifier(
+        num_classes=num_classes,
+        pretrained=not args.no_classifier_pretrained,
+        freeze_backbone=args.classifier_freeze_backbone,
+        device=device,
+    )
+
+    metrics = evaluate_classifier(classifier, loader, device=device)
+    print(
+        {
+            "mode": "eval_classifier",
+            "dataset": args.dataset,
+            "corruption": args.corruption,
+            "severity": args.severity,
+            **metrics,
+        }
+    )
+
+
+>>>>>>> e3cf566 (Wrap eval into trainer script):rl_trainer.py
 if __name__ == "__main__":
+    if args.mode == "eval_classifier":
+        # Simple classifier evaluation; no diffusion / DDPO.
+        run_classifier_eval()
+        raise SystemExit(0)
+
     if accelerator.is_main_process:
         print(f"Running on {accelerator.num_processes} GPUs.")
         print(f"Per-device batch: {args.gpu_batch_size}")
@@ -524,23 +740,6 @@ if __name__ == "__main__":
     if accelerator.is_main_process:
         wandb.config.update(vars(args))
 
-    ##################################
-    # Fix accelerate save_state bug
-    ##################################
-    original_save_state = trainer.accelerator.save_state
-
-    def patched_save_state(output_dir=None, **kwargs):
-        if output_dir is None:
-            # Force the path if it's missing
-            output_dir = os.path.join(config.project_kwargs["project_dir"], "checkpoints")
-        
-        # Ensure the directory exists (the root cause of your error)
-        os.makedirs(output_dir, exist_ok=True)
-        
-        return original_save_state(output_dir=output_dir, **kwargs)
-
-    trainer.accelerator.save_state = patched_save_state
-    
     ##################################
     # Begin training!
     ##################################
