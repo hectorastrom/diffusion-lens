@@ -12,9 +12,9 @@ from rl.reward import CLIPReward
 ##################################
 # Dataset Reading
 ##################################
-# [PROJECT_ROOT]/datasets/COD10K
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) 
-DATASET_ROOT = os.path.join(os.path.dirname(SCRIPT_DIR), "datasets", "COD10K")
+# data/COD10K
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # when run as module this is just the project root
+DATASET_ROOT = os.path.join(os.path.dirname(SCRIPT_DIR), "data", "COD10K")
 
 SPLITS = ["Train", "Test"]
 # SubClass is located at index 5 in the filename split.
@@ -77,16 +77,18 @@ def load_cod10k_lazy() -> DatasetDict:
     
     Cols: 'image', 'label', 'image_path'
     """
-    assert os.path.isdir(DATASET_ROOT), "ERORR: Dataset folder is missing."
+    assert os.path.isdir(
+        DATASET_ROOT
+    ), f"ERROR: Dataset folder is missing: {DATASET_ROOT}."
     dataset_dict = {}
-    
+
     # schema is info datasets need to load image on demand from filepath
     features_schema = Features({
         "image" : ImageFeature(),
         "label_name": Value('string'),
         "image_path": Value('string')
     })
-    
+
     for split in SPLITS:
         raw_dataset = Dataset.from_generator(
             image_label_generator,
@@ -94,40 +96,40 @@ def load_cod10k_lazy() -> DatasetDict:
             gen_kwargs={"split_name": split} # this are kwargs it passes to image_label_generator
         )
         dataset_dict[split.lower()] = raw_dataset
-        
+
     raw_datasets = DatasetDict(dataset_dict)
-    
+
     # filter out superclasses and NonCAM images (only CAM images are included)
     # NonCAM images are already filtered in image_label_generator
     raw_datasets = raw_datasets.filter(
         lambda x: x['label_name'] is not None,
         num_proc=os.cpu_count() // 2
     )
-    
+
     # convert str class names to ClassLabel features
     all_labels = set()
     for split in raw_datasets:
         all_labels.update(raw_datasets[split]["label_name"])
-        
+
     label_list = sorted(list(all_labels))
     # mapping of all possible labels to ints (categorical)
     class_feature = ClassLabel(names=label_list) 
-    
+
     def encode_labels(sample):
         sample['label'] = class_feature.str2int(sample['label_name'])
         return sample
-    
+
     # turns labels from strings to ints
     raw_datasets = raw_datasets.map(encode_labels)
-    
+
     # imgs remain untouched, and are decoded from filepaths JIT
     final_dataset = raw_datasets.map(
         encode_labels, 
         remove_columns=['label_name']
     )
-    
+
     final_dataset = final_dataset.cast_column("label", class_feature)
-    
+
     return final_dataset
 
 ##################################
@@ -177,7 +179,7 @@ def build_COD_torch_dataset(split_name : str = 'train', image_size : int = 512):
     dataset.label2str = label_feature.int2str
     
     return dataset
-    
+
 if __name__ == "__main__":
     dataset = build_COD_torch_dataset('train')
     loader = DataLoader(dataset, batch_size=4, num_workers=1, shuffle=True)
