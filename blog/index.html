@@ -9,6 +9,27 @@
 
 	<link rel="shortcut icon" href="images/icon.ico" />
 	<style type="text/css">
+		@font-face {
+			font-family: 'Iowan Old Style';
+			src: url('fonts/iowanoldst.ttf') format('truetype');
+			font-weight: normal;
+			font-style: normal;
+		}
+
+		@font-face {
+			font-family: 'Iowan Old Style';
+			src: url('fonts/iowanoldst-italic.ttf') format('truetype');
+			font-weight: normal;
+			font-style: italic;
+		}
+
+		@font-face {
+			font-family: 'Iowan Old Style';
+			src: url('fonts/iowanoldst-bold-italic.ttf') format('truetype');
+			font-weight: bold;
+			font-style: italic;
+		}
+
 		body {
 			background-color: #f5f9ff;
 		}
@@ -47,8 +68,7 @@
 			border-left: 1px solid #DDD;
 			border-right: 1px solid #DDD;
 			padding: 8px 8px 8px 8px;
-			font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
-			#"Avenir";
+			font-family: 'Iowan Old Style', serif;
 		}
 
 		.margin-left-block {
@@ -60,14 +80,12 @@
 			position: relative;
 			margin-left: 10px;
 			text-align: left;
-			font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
-			#"Avenir";
+			font-family: 'Iowan Old Style', serif;
 			padding: 5px;
 		}
 
 		.margin-right-block {
-			font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
-			#"Avenir";
+			font-family: 'Iowan Old Style', serif;
 			font-size: 14px;
 			width: 25%;
 			/* Change this percentage as needed */
@@ -303,9 +321,13 @@
 			</div>
 		</div>
 		<div class="main-content-block">
-			<img src="./images/your_image_here.png" width="512px" />
+			<img src="./images/train_pipelines.png" style="width: 80%; height: auto;" />
 		</div>
-		<div class="margin-right-block">Caption for the image.</div>
+		<div class="margin-right-block">SFT and RL training pipelines. In the
+		SFT pipeline, gradient updates are free to backpropagate through a
+		frozen classifier. Conversely, in RL, weight updates are faciliated
+		through DDPO, where the reward is a weighted combination of classifier
+		confidence and perceptual drift. </div>
 	</div>
 
 	<div class="content-margin-container" id="intro">

@@ -1,10 +1,13 @@
-# Python-generated files
 __pycache__/
 *.py[oc]
+.vscode
 build/
 dist/
 wheels/
 *.egg-info
+.venv
+
+# Project files
 data/*
 !data/COD_dataset.py
 !data/README.md
@@ -14,8 +17,6 @@ wandb
 ddpo_logs
 gradient_logs
 kevin_scripts
-
-# Virtual environments
-.venv
-
 eval_outputs/
+
+
