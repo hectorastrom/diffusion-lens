@@ -97,6 +97,29 @@
 			/* Optional: Adds padding inside the caption */
 		}
 
+		.citation-margin {
+			width: 100%;
+			font-size: 12px;
+			color: #555;
+			padding: 5px 0;
+			box-sizing: border-box;
+			margin-bottom: 10px; /* Space between stacked citations */
+		}
+
+		.citation-margin a {
+			color: #555;
+			text-decoration: underline;
+		}
+
+		.citation-margin a:hover {
+			color: #000;
+		}
+
+		/* Hide the bottom references section but keep it for data */
+		#citations {
+			display: none;
+		}
+
 		img {
 			max-width: 100%;
 			/* Make sure it fits inside the container */
@@ -263,10 +286,44 @@
 			width: 50px;
 			/* Optional: Adds space between the div and the paragraph */
 		}
+
+		.image-caption {
+			text-align: center;
+			font-size: 0.9em;
+			margin-top: 5px;
+			color: #666;
+		}
+
+		.image-caption-small {
+			text-align: center;
+			font-size: 0.85em;
+			margin-top: 5px;
+			color: #666;
+		}
+
+		ol.references {
+			list-style-type: none;
+			padding-left: 0;
+			counter-reset: ref-counter;
+		}
+
+		ol.references li {
+			counter-increment: ref-counter;
+			margin-bottom: 10px;
+			position: relative;
+			padding-left: 30px;
+		}
+
+		ol.references li::before {
+			content: "[" counter(ref-counter) "] ";
+			position: absolute;
+			left: 0;
+			/* font-weight: bold; */
+		}
 	</style>
 
-	<title>Diffusion Lens</title>
-	<meta property="og:title" content="Diffusion Lens" />
+	<title>Gaussian Glasses</title>
+	<meta property="og:title" content="Gaussian Glasses" />
 	<meta charset="UTF-8" />
 </head>
 
@@ -280,7 +337,8 @@
 						<span style="
                   font-size: 32px;
                   font-family: 'Courier New', Courier, monospace; /* Adds fallbacks */
-                ">Diffusion Lens</span>
+						">Gaussian Glasses: Can Diffusion Models Be Used for
+						Semantic Signal Amplification for Vision Classifiers?</span>
 					</td>
 				</tr>
 				<tr>
@@ -322,10 +380,10 @@
 		</div>
 		<div class="main-content-block">
 			<img src="./images/train_pipelines.png" style="width: 80%; height: auto;" />
+			<p class="image-caption">SFT and RL training pipelines</p>
 		</div>
-		<div class="margin-right-block">SFT and RL training pipelines. In the
-		SFT pipeline, gradient updates are free to backpropagate through a
-		frozen classifier. Conversely, in RL, weight updates are faciliated
+		<div class="margin-right-block">In the SFT pipeline, gradient updates are free to backpropagate through a
+		frozen classifier. Conversely, in RL parameter updates are faciliated
 		through DDPO, where the reward is a weighted combination of classifier
 		confidence and perceptual drift. </div>
 	</div>
@@ -334,26 +392,55 @@
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
 			<h1>Introduction (Hector)</h1>
-			In this work, we explore whether generative diffusion models could
-			be effective preprocessors for visual classifiers, to
-			reveal or otherwise de-corrupt hidden subjects. In particular, we
-			explore whether Stable Diffusion 1.5, optimized through SFT or RL (DDPO),
-			can improve CLIP classification performance on a two tasks:
-			1. camouflaged animals, and 2. algorithmically corrupted CIFAR
-			images. 
-
-			Diffusion probabilistic models, first introduced 
-
-
-			Diffusion probabilistic models <a href="#ref_1">[1]</a> have recently
-			emerged as the de facto standard for generative modeling in continuous
-			domains. Motivate your project. What question are you asking. Why is it
-			unanswered so far? What gap in the literature or practice are you
-			filling? Why is it important? Introduce both tasks and outline structure
-			of this piece.
+			Since the emergence of Denoising Diffusion Probabilistic Models
+			(DDPMs), generative vision has evolved from simple synthesis to
+			precise, instructional editing <a href="#ref_ho" class="cite"></a> <a href="#ref_ho_cfg" class="cite"></a>. Models like
+			InstructPix2Pix <a href="#ref_brooks" class="cite"></a> and
+			ControlNet <a href="#ref_zhang" class="cite"></a> have demonstrated that diffusion
+			priors can manipulate
+			image semantics with remarkable fidelity, effectively
+			"understanding" the contents of a scene to modify it.
+			<br><br>
+			
+			This rapid progress raises a central question in computer vision:
+			Can the rich, generative manifold of a foundation model function as
+			a semantic denoiser for discriminative classifiers? Essentially, we
+			explore whether the probabilistic "belief" of a diffusion model—its
+			learned distribution of what objects should look like—can be
+			leveraged to perform Semantic Signal Amplification, recovering
+			recognizable features from ambiguous inputs to aid downstream
+			classification.
+			<br><br>
+			
+			In this work, we investigate whether Stable Diffusion v1.5,
+			optimized through both Supervised Fine-Tuning (SFT) and
+			Reinforcement Learning (DDPO), can improve the zero-shot
+			classification performance of CLIP on two distinct domains of visual
+			degradation:
+			<ul>
+				<li>
+					<b>Natural Ambiguity:</b> The COD10K (Camouflaged Object Detection) dataset,
+					where the signal (animal) is hidden or camouflaged.
+				</li>
+				<li>
+					<b>Algorithmic Corruption:</b> The CIFAR-10-C dataset, representing
+					standard noise and blur degradations.
+				</li>
+			</ul>
+			
+			We report a negative result. Our experiments demonstrate that
+			despite the semantic strength of the diffusion prior, the generative
+			reconstruction introduces stochastic hallucinations that decouple
+			the image from its ground truth label more often than it recovers
+			the signal. We find that neither SFT nor RL-based optimization
+			yields a statistically significant improvement over the base CLIP
+			accuracy. Given the substantial computational complexity and latency
+			introduced by the diffusion loop, we conclude that generative
+			semantic completion—at least within this architectural paradigm—is
+			an ineffective approach for enhancing robustness to visually
+			degraded inputs compared to standard discriminative baselines.
 		</div>
 		<div class="margin-right-block">
-			Margin note that clarifies some detail for the introduction section.
 		</div>
 	</div>
 
@@ -364,8 +451,8 @@
 			<!-- NOTE: Merging related work into this section; just cite a lot -->
 			<h2 id="preliminaries_diffusion">Diffusion (Kevin)</h2>
 			<p>
-				In this work, we adopt conditional diffusion probabilistic models
-				<a href="#ref_1">[1]</a> <a href="#ref_2">[2]</a>, which define a distribution
+			In this work, we adopt conditional diffusion probabilistic models
+			<a href="#ref_sohldickstein" class="cite"></a> <a href="#ref_ho" class="cite"></a>, which define a distribution
 				\( p(x_0 | c) \) over data samples \( x_0 \) given an associated context \( c \).
 				These models operate by introducing a forward noising process
 				\( q(x_t | x_{t-1}) \), a Markov chain that incrementally corrupts the data with noise across many
@@ -394,7 +481,7 @@
 				At sampling time, generation begins from Gaussian noise \( x_T \sim \mathcal{N}(0, I) \). The model then
 				iteratively applies the learned reverse transitions
 				\( p_\theta(x_{t-1} | x_t, c) \), gradually removing noise and steering the sample
-				toward the data distribution. Most widely used samplers <a href="#ref_2">[2]</a> <a href="#ref_4">[4]</a> implement
+				toward the data distribution. Most widely used samplers <a href="#ref_ho" class="cite"></a> <a href="#ref_song" class="cite"></a> implement
 				this reverse update as an isotropic Gaussian with a timestep-dependent variance:
 			</p>
 
@@ -412,7 +499,6 @@
 			Explain DDPOTrainer
 		</div>
 		<div class="margin-right-block">
-			Margin note for Preliminaries section.
 		</div>
 	</div>
 
@@ -428,7 +514,7 @@
 			details about the datasets used, any filtering applied, and how we
 			gained access (citations)
 		</div>
-		<div class="margin-right-block">Margin note for Data section.</div>
+		<div class="margin-right-block"></div>
 	</div>
 
 	<div class="content-margin-container" id="methods">
@@ -458,8 +544,8 @@
 			</p>
 
 			<p>
-				Our SFT method trains a LoRA adapter on the UNet component of Stable Diffusion
-				<a href="#ref_3">[3]</a> to optimize CLIP <a href="#ref_5">[5]</a> classification accuracy. The key insight is that the
+			Our SFT method trains a LoRA adapter on the UNet component of Stable Diffusion
+			<a href="#ref_rombach" class="cite"></a> to optimize CLIP <a href="#ref_radford" class="cite"></a> classification accuracy. The key insight is that the
 				entire pipeline (from the UNet's denoising predictions through the VAE decoder
 				to the frozen CLIP classifier) is differentiable, allowing us to compute
 				gradients directly with respect to the classification loss.
@@ -616,7 +702,7 @@
 			</p>
 
 		</div>
-		<div class="margin-right-block">Margin note for Methods section.</div>
+		<div class="margin-right-block"></div>
 	</div>
 
 	<div class="content-margin-container" id="results">
@@ -688,7 +774,7 @@
 						<div style="flex: 1;">
 							<img src="./images/good_no_prompt_sft_before_1.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Grasshopper
 							</p>
@@ -696,7 +782,7 @@
 						<div style="flex: 1;">
 							<img src="./images/good_no_prompt_sft_after_1.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Grasshopper
 							</p>
@@ -710,7 +796,7 @@
 						<div style="flex: 1;">
 							<img src="./images/original_2.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Frog
 							</p>
@@ -718,7 +804,7 @@
 						<div style="flex: 1;">
 							<img src="./images/no_prompt_sft_2.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Frog
 							</p>
@@ -732,7 +818,7 @@
 						<div style="flex: 1;">
 							<img src="./images/original_3.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Spider
 							</p>
@@ -740,7 +826,7 @@
 						<div style="flex: 1;">
 							<img src="./images/no_prompt_sft_3.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Spider
 							</p>
@@ -756,7 +842,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_before_4.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Turtle<br />
 							</p>
@@ -764,7 +850,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_after_4.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Owl<br />
 							</p>
@@ -778,7 +864,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_before_5.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Snake<br />
 							</p>
@@ -786,7 +872,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_after_5.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Frog<br />
 							</p>
@@ -800,7 +886,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_before_6.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Spider<br />
 							</p>
@@ -808,7 +894,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_after_6.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Moth<br />
 							</p>
@@ -844,7 +930,7 @@
 					<img src="./images/val_loss_comparison.png"
 						alt="Validation loss comparison across prompt strategies"
 						style="width: 100%; border: 1px solid #ddd;" />
-					<p style="text-align: center; font-size: 0.9em; margin-top: 5px; color: #666;">
+					<p class="image-caption">
 						Validation loss comparison
 					</p>
 				</div>
@@ -852,7 +938,7 @@
 					<img src="./images/val_accuracy_comparison.png"
 						alt="Validation accuracy comparison across prompt strategies"
 						style="width: 100%; border: 1px solid #ddd;" />
-					<p style="text-align: center; font-size: 0.9em; margin-top: 5px; color: #666;">
+					<p class="image-caption">
 						Validation accuracy comparison
 					</p>
 				</div>
@@ -875,7 +961,7 @@
 						<div style="flex: 1;">
 							<img src="./images/oracle_prompt_before_1.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Cat
 							</p>
@@ -883,7 +969,7 @@
 						<div style="flex: 1;">
 							<img src="./images/oracle_prompt_after_1.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Cat
 							</p>
@@ -897,7 +983,7 @@
 						<div style="flex: 1;">
 							<img src="./images/oracle_prompt_before_2.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Frog
 							</p>
@@ -905,7 +991,7 @@
 						<div style="flex: 1;">
 							<img src="./images/oracle_prompt_after_2.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Frog
 							</p>
@@ -919,7 +1005,7 @@
 						<div style="flex: 1;">
 							<img src="./images/oracle_prompt_before_3.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Mantis
 							</p>
@@ -927,7 +1013,7 @@
 						<div style="flex: 1;">
 							<img src="./images/oracle_prompt_after_3.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Mantis
 							</p>
@@ -951,7 +1037,7 @@
 						<div style="flex: 1;">
 							<img src="./images/good_no_prompt_sft_before_1.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Grasshopper
 							</p>
@@ -959,7 +1045,7 @@
 						<div style="flex: 1;">
 							<img src="./images/good_no_prompt_sft_after_1.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Grasshopper
 							</p>
@@ -973,7 +1059,7 @@
 						<div style="flex: 1;">
 							<img src="./images/original_2.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Frog
 							</p>
@@ -981,7 +1067,7 @@
 						<div style="flex: 1;">
 							<img src="./images/no_prompt_sft_2.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Frog
 							</p>
@@ -995,7 +1081,7 @@
 						<div style="flex: 1;">
 							<img src="./images/original_3.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Spider
 							</p>
@@ -1003,7 +1089,7 @@
 						<div style="flex: 1;">
 							<img src="./images/no_prompt_sft_3.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Spider
 							</p>
@@ -1019,7 +1105,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_before_4.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Turtle<br />
 							</p>
@@ -1027,7 +1113,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_after_4.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Owl<br />
 							</p>
@@ -1041,7 +1127,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_before_5.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Snake<br />
 							</p>
@@ -1049,7 +1135,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_after_5.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Frog<br />
 							</p>
@@ -1063,7 +1149,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_before_6.png" alt="Before: Original camouflaged image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>Before</strong><br />
 								Spider<br />
 							</p>
@@ -1071,7 +1157,7 @@
 						<div style="flex: 1;">
 							<img src="./images/fail_no_prompt_sft_after_6.png" alt="After: Enhanced image"
 								style="width: 100%; border: 1px solid #ddd;" />
-							<p style="text-align: center; font-size: 0.85em; margin-top: 5px; color: #666;">
+							<p class="image-caption-small">
 								<strong>After</strong><br />
 								Moth<br />
 							</p>
@@ -1092,7 +1178,6 @@
 			Comparing clip vs. clip+diffusion RL for CIFAR-C
 		</div>
 		<div class="margin-right-block">
-			Figure 3
 		</div>
 	</div>
 
@@ -1147,28 +1232,121 @@
 			<div class="citation" id="references" style="height: auto">
 				<br />
 				<span style="font-size: 16px">References:</span><br /><br />
-				<a id="ref_1"></a>[1] Sohl-Dickstein, J., Weiss, E., Maheswaranathan, N., & Ganguli, S. (2015). 
-				<a href="https://arxiv.org/abs/1503.03585">Deep Unsupervised Learning using Nonequilibrium Thermodynamics</a>. 
-				ICML 2015.<br /><br />
-				<a id="ref_2"></a>[2] Ho, J., Jain, A., & Abbeel, P. (2020). 
-				<a href="https://arxiv.org/abs/2006.11239">Denoising Diffusion Probabilistic Models</a>. 
-				NeurIPS 2020.<br /><br />
-				<a id="ref_3"></a>[3] Rombach, R., Blattmann, A., Lorenz, D., Esser, P., & Ommer, B. (2022). 
-				<a href="https://arxiv.org/abs/2112.10752">High-Resolution Image Synthesis with Latent Diffusion Models</a>. 
-				CVPR 2022.<br /><br />
-				<a id="ref_4"></a>[4] Song, J., Meng, C., & Ermon, S. (2021). 
-				<a href="https://arxiv.org/abs/2010.02502">Denoising Diffusion Implicit Models</a>. 
-				ICLR 2021.<br /><br />
-				<a id="ref_5"></a>[5] Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., ... & Sutskever, I. (2021). 
-				<a href="https://arxiv.org/abs/2103.00020">Learning Transferable Visual Models From Natural Language Supervision</a>. 
-				ICML 2021.<br /><br />
-				<a id="ref_6"></a>[6] Black, K., Janner, M., Du, Y., Kostrikov, I., & Levine, S. (2023). 
-				<a href="https://arxiv.org/abs/2305.13301">Training Diffusion Models with Reinforcement Learning</a>. 
-				NeurIPS 2023.<br /><br />
+				<ol class="references">
+					<li id="ref_ho">
+						Ho, J., Jain, A., & Abbeel, P. (2020).
+						<a href="https://arxiv.org/abs/2006.11239">Denoising Diffusion Probabilistic Models</a>.
+						NeurIPS 2020.
+					</li>
+					<li id="ref_sohldickstein">
+						Sohl-Dickstein, J., Weiss, E., Maheswaranathan, N., & Ganguli, S. (2015).
+						<a href="https://arxiv.org/abs/1503.03585">Deep Unsupervised Learning using Nonequilibrium Thermodynamics</a>.
+						ICML 2015.
+					</li>
+					<li id="ref_ho_cfg">
+						Ho, J., & Salimans, T. (2022).
+						<a href="https://arxiv.org/abs/2207.12598">Classifier-Free Diffusion Guidance</a>.
+						arXiv:2207.12598.
+					</li>
+					<li id="ref_brooks">
+						Brooks, T., et al. (2023).
+						<a href="https://arxiv.org/abs/2211.09800">InstructPix2Pix: Learning to Follow Image Editing Instructions</a>.
+						arXiv:2211.09800.
+					</li>
+					<li id="ref_zhang">
+						Zhang, L., et al. (2023).
+						<a href="https://arxiv.org/abs/2302.05543">Adding Conditional Control to Text-to-Image Diffusion Models</a>.
+						arXiv:2302.05543.
+					</li>
+					<li id="ref_rombach">
+						Rombach, R., Blattmann, A., Lorenz, D., Esser, P., & Ommer, B. (2022).
+						<a href="https://arxiv.org/abs/2112.10752">High-Resolution Image Synthesis with Latent Diffusion Models</a>.
+						CVPR 2022.
+					</li>
+					<li id="ref_song">
+						Song, J., Meng, C., & Ermon, S. (2021).
+						<a href="https://arxiv.org/abs/2010.02502">Denoising Diffusion Implicit Models</a>.
+						ICLR 2021.
+					</li>
+					<li id="ref_radford">
+						Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., ... & Sutskever, I. (2021).
+						<a href="https://arxiv.org/abs/2103.00020">Learning Transferable Visual Models From Natural Language Supervision</a>.
+						ICML 2021.
+					</li>
+					<li id="ref_black">
+						Black, K., Janner, M., Du, Y., Kostrikov, I., & Levine, S. (2023).
+						<a href="https://arxiv.org/abs/2305.13301">Training Diffusion Models with Reinforcement Learning</a>.
+						NeurIPS 2023.
+					</li>
+				</ol>
 			</div>
 		</div>
 		<div class="margin-right-block"></div>
 	</div>
+	<script>
+		document.addEventListener("DOMContentLoaded", function () {
+			const refList = document.querySelector('ol.references');
+			if (!refList) return;
+
+			// 1. Gather reference data
+			const refData = {};
+			const refUrls = {};
+			Array.from(refList.children).forEach(item => {
+				if (item.id) {
+					refData[item.id] = item.innerHTML;
+					const link = item.querySelector('a');
+					if (link) {
+						refUrls[item.id] = link.getAttribute('href');
+					}
+				}
+			});
+
+			// 2. Find all citation links in the document order
+			const citations = document.querySelectorAll('a.cite');
+			let citationCount = 0;
+			const citedIDs = new Map(); // id -> number
+			const marginDisplayedIDs = new Set(); // Track IDs already shown in margin
+
+			citations.forEach(cite => {
+				const href = cite.getAttribute('href');
+				if (href && href.startsWith('#')) {
+					const id = href.substring(1);
+					
+					// Assign number if first time seen
+					if (!citedIDs.has(id)) {
+						citationCount++;
+						citedIDs.set(id, citationCount);
+					}
+					
+					const num = citedIDs.get(id);
+					cite.textContent = `[${num}]`;
+					
+					// Update link to point to external URL
+					if (refUrls[id]) {
+						cite.setAttribute('href', refUrls[id]);
+						cite.setAttribute('target', '_blank');
+					}
+
+					// Create margin note if not already displayed
+					if (!marginDisplayedIDs.has(id)) {
+						marginDisplayedIDs.add(id);
+						
+						const container = cite.closest('.content-margin-container');
+						if (container) {
+							const rightMargin = container.querySelector('.margin-right-block');
+							if (rightMargin) {
+								const note = document.createElement('div');
+								note.className = 'citation-margin';
+								note.innerHTML = `<span style="font-weight: bold;">${num}</span> ${refData[id]}`;
+								
+								rightMargin.appendChild(note);
+							}
+						}
+					}
+				}
+			});
+		});
+	</script>
 </body>
 
 </html>
