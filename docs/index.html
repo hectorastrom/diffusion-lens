@@ -674,9 +674,58 @@
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
 			<h2 id="methods_imageddpo">ImageDDPO (Hector)</h2>
-			To adapt DDPO to our task, we had to build a custom class we're
-			calling <code>ImageDDPO</code>. This changes the objective of
-			standard DDPO in the following meaningful ways:
+			
+			<p>
+				ImageDDPO extends DDPO to the img2img setting by optimizing a diffusion policy that edits an input image instead of
+				generating purely from noise.
+			</p>
+			
+			<p><strong>MDP and Objective Changes</strong></p>
+			<ul>
+				<li>
+					<strong>Multimodal context.</strong>
+					The conditioning becomes
+					\( c = (\text{text_prompt},\, \text{input_image}) \),
+					so the policy learns edits relative to a source image.
+				</li>
+				<li>
+					<strong>Non-noise initial state.</strong>
+					Instead of \( x_T \sim \mathcal{N}(0, I) \),
+					we encode the input image, then apply forward diffusion to reach
+					\( x_{sT} \) with noise strength \( s \in [0,1] \).
+				</li>
+				<li>
+					<strong>Shortened horizon.</strong>
+					The denoising trajectory runs from \( t = sT \) down to \( t = 0 \)
+					(e.g. \( s = 0.4 \Rightarrow t = 400 \to 0 \)),
+					but each transition is still a Gaussian
+					\( p_\theta(x_{t-1} \mid x_t, c) \),
+					so DDPO’s log-prob and PPO machinery apply unchanged over this truncated chain.
+				</li>
+			</ul>
+			
+			<p><strong>Implementation Changes from DDPO</strong></p>
+			<ul>
+				<li>
+					<strong>Img2img DDPO pipeline.</strong>
+					<code>Img2ImgDDPOStableDiffusionPipeline</code> wraps the base DDPO pipeline to:
+					(i) VAE-encode the input image, (ii) forward diffuse to \( x_{sT} \),
+					and (iii) denoise from \( t = sT \) to \( 0 \) while recording latents and log-probs.
+				</li>
+				<li>
+					<strong>Noise strength hyperparameter.</strong>
+					A scalar \( s \in [0,1] \) controls how far back we start in the diffusion chain,
+					defining the effective MDP horizon and the set of actions included in the PPO loss.
+				</li>
+				<li>
+					<strong>Prompt and reward interfaces.</strong>
+					The prompt function yields tuples
+					\( (\text{init_images},\, \text{text_prompts},\, \text{metadata}) \),
+					and reward functions are upgraded to
+					\( r(x_0, c) = r(x_0, \text{init_image}, \text{text_prompt}, \text{metadata}) \),
+					enabling image-conditioned objectives (e.g. "make the animal more detectable").
+				</li>
+			</ul>
 			
 			<h2 id="methods_rl">RL Methods (universal) (Hector + Luc)</h2>
 			Explain the methodology for the RL attempts. Hector will write about
