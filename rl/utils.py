@@ -6,7 +6,7 @@ However, some generic utils -- such as for building reward functions and dataset
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 import torch
 import torch.nn as nn
@@ -34,6 +34,52 @@ CIFAR10_LABELS = [
     "ship",
     "truck",
 ]
+
+
+def _load_tiny_imagenet_wnid_to_label(clean_root: Path) -> Dict[str, str]:
+    """Load Tiny-ImageNet wnid -> human-readable label mapping.
+
+    Expects the standard Tiny-ImageNet-200 layout with ``wnids.txt`` and
+    ``words.txt``. We primarily rely on ``words.txt`` which maps
+    ``wnid -> comma separated synonyms`` and take the first synonym as a
+    concise class name. If files are missing, returns an empty dict and
+    callers should gracefully fall back to using the raw WNIDs.
+    """
+
+    wnids_path = clean_root / "wnids.txt"
+    words_path = clean_root / "words.txt"
+
+    mapping: Dict[str, str] = {}
+
+    if not words_path.exists():
+        return mapping
+
+    try:
+        with words_path.open("r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Lines are typically "wnid<TAB>syn1, syn2, ..." or
+                # "wnid syn1, syn2, ...". Handle both.
+                if "\t" in line:
+                    wnid, rest = line.split("\t", 1)
+                else:
+                    parts = line.split(" ", 1)
+                    if len(parts) != 2:
+                        continue
+                    wnid, rest = parts
+
+                human = rest.split(",")[0].strip()
+                mapping[wnid] = human
+    except Exception:
+        # On any unexpected format issue, just return whatever we parsed
+        # (possibly empty) and let callers fall back to wnids.
+        return mapping
+
+    return mapping
+
 
 def build_sd_transform(image_size: int, augment: bool = False):
     """
@@ -125,7 +171,16 @@ def build_data_and_reward(accelerator: Accelerator, args: Any):
             severity=args.severity,
             transform=sd_transform,
         )
-        label2str = resolve_label_str_fn("Tiny-ImageNet-C", tiny_dataset=dataset)
+
+        # Map Tiny-ImageNet WNIDs to human-readable labels using the
+        # clean tiny-imagenet-200 metadata if available.
+        clean_root = Path(args.data_root) / "tiny-imagenet-200"
+        wnid_to_label = _load_tiny_imagenet_wnid_to_label(clean_root)
+
+        def label2str(idx: int) -> str:
+            wnid = dataset.idx_to_class[idx]
+            return wnid_to_label.get(wnid, wnid)
+
         class_names = [label2str(i) for i in range(len(dataset.idx_to_class))]
 
         reward_fn = CLIPReward(
@@ -193,10 +248,13 @@ def run_classifier_eval(args: Any, device: torch.device) -> None:
             severity=args.severity,
             transform=sd_transform,
         )
-        # WordNet IDs as class names
-        class_names = [
-            dataset.idx_to_class[i] for i in range(len(dataset.idx_to_class))
-        ]
+        # Human-readable Tiny-ImageNet labels, falling back to WNIDs
+        clean_root = Path(args.data_root) / "tiny-imagenet-200"
+        wnid_to_label = _load_tiny_imagenet_wnid_to_label(clean_root)
+        class_names = []
+        for i in range(len(dataset.idx_to_class)):
+            wnid = dataset.idx_to_class[i]
+            class_names.append(wnid_to_label.get(wnid, wnid))
     else:
         raise ValueError("Classifier eval mode is only supported for CIFAR-C and Tiny-ImageNet-C datasets")
 
