@@ -4,40 +4,15 @@
 # @File    : ddpo.py
 
 import torch
-from collections import defaultdict
 import numpy as np
 from trl import DDPOTrainer, DefaultDDPOStableDiffusionPipeline
+from trl.models.modeling_sd_base import DDPOPipelineOutput, DDPOSchedulerOutput, _left_broadcast
 from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import rescale_noise_cfg
-from dataclasses import dataclass
 import wandb
 
 # ==========================================
 # 1. TRL/DDPO Helper Classes & Math
 # ==========================================
-
-@dataclass
-class DDPOPipelineOutput:
-    images: torch.Tensor
-    latents: torch.Tensor
-    log_probs: torch.Tensor
-
-@dataclass
-class DDPOSchedulerOutput:
-    latents: torch.Tensor
-    log_probs: torch.Tensor
-
-
-def _left_broadcast(input_tensor, shape):
-    input_ndim = input_tensor.ndim
-    if input_ndim > len(shape):
-        raise ValueError(
-            "The number of dimensions of the tensor to broadcast cannot be greater "
-            "than the length of the shape to broadcast to"
-        )
-    return input_tensor.reshape(
-        input_tensor.shape + (1,) * (len(shape) - input_ndim)
-    ).broadcast_to(shape)
-
 
 def _get_variance(self, timestep, prev_timestep):
     """
