@@ -902,8 +902,20 @@
 			<h2 id="methods_rl">RL Methods (universal) (Hector + Luc)</h2>
 			Explain the methodology for the RL attempts. Hector will write about
 			general setup and structure (rl loop, reward function, how
-			ImageDDPOTrainer is used) Luc will write about modifications made to
-			original setup for the CIFAR-C task.
+			ImageDDPOTrainer is used)
+			<!-- Luc will write about modifications made to original setup for the CIFAR-C task. -->
+			
+			Once the data was collected and preprocessed into the same format
+			as the COD10K dataset, we used the same ImageDDPOTrainer class
+			to train Stable Diffusion with RL on the CIFAR-10-C and ImageNet-C datasets.
+			As we had plain text labels for both additional datasets,
+			the training pipeline and reward function remained the same.
+			However, it is important to note that the CIFAR-10-C is much simpler
+			with smaller images and only 10 classes.
+			Along with having larger images, ImageNet-C has 1000 classes,
+			which can make it more challenging for the RL optimization to
+			effectively improve classification accuracy.
+
 			<h2 id="methods_sft">Supervised Fine-Tuning (Kevin)</h2>
 			<p>
 				Our initial approach used RL via DDPO, which provides a general framework for optimizing 
