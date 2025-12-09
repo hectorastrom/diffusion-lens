@@ -161,12 +161,27 @@ def parse_args():
         default=4,
         help="Number of workers for the DataLoader.",
     )
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Enable a tiny config for quick RL loop checks (default off).",
+    )
 
     return parser.parse_args()
 
 
 # Parse arguments first
 args = parse_args()
+
+# Lightweight test mode to sanity-check the RL loop quickly
+if args.test:
+    args.gpu_batch_size = 1
+    args.target_global_batch_size = 2
+    args.loader_batch_size = 4
+    args.num_workers = 1
+
+LOG_WANDB = not args.test
+LOG_BACKEND = "wandb" if LOG_WANDB else None
 
 ##################################
 # Constants
@@ -178,7 +193,7 @@ acc_project_config = ProjectConfiguration(
 )
 # initialize accelerator instance exactly as DDPOTrainer will so they don't conflict
 accelerator = Accelerator(
-    log_with="wandb", mixed_precision="fp16", project_config=acc_project_config
+    log_with=LOG_BACKEND, mixed_precision="fp16", project_config=acc_project_config
 )
 
 # NOTE: The actual number of diffusion steps take is noise_strength *
@@ -275,7 +290,7 @@ if __name__ == "__main__":
         Runs validation image through pipeline, logging before and after diffusion.
         Uses cached reward for the input image.
         """
-        if not accelerator.is_main_process:
+        if not accelerator.is_main_process or args.test:
             return 
 
         pipeline.vae.eval()
@@ -345,14 +360,13 @@ if __name__ == "__main__":
             # I just don't wanna see the big ID think
             after_str = f"{val_prompt.split(' id:')[0]} id:..."
 
-        wandb.log({
-            "validation/before_vs_after": [
-                # Use cached numpy image and cached reward
-                wandb.Image(val_before_img_vis, caption=f"Before (label='{val_meta['label_str']}', r={val_before_reward:.2f})"),
-                # Use new PIL image and new reward
-                wandb.Image(after_img_pil, caption=f"After (RL, prompt='{after_str}', r={after_reward:.2f})")
-            ]
-        }, step=wandb_step)
+        if LOG_WANDB:
+            wandb.log({
+                "validation/before_vs_after": [
+                    wandb.Image(val_before_img_vis, caption=f"Before (label='{val_meta['label_str']}', r={val_before_reward:.2f})"),
+                    wandb.Image(after_img_pil, caption=f"After (RL, prompt='{after_str}', r={after_reward:.2f})")
+                ]
+            }, step=wandb_step)
 
     ##################################
     # Configuration
@@ -360,7 +374,7 @@ if __name__ == "__main__":
     config = DDPOConfig(
         # --- Logging & General ---
         num_epochs=args.epochs,
-        log_with= "wandb",               # Highly recommended to visualize the Reward curve
+        log_with= LOG_BACKEND,
         mixed_precision="fp16",         # Standard for SD 1.5
         allow_tf32=True,
         
@@ -420,7 +434,7 @@ if __name__ == "__main__":
     )
 
     # add custom args to wandb config
-    if accelerator.is_main_process:
+    if accelerator.is_main_process and LOG_WANDB:
         wandb.config.update(vars(args))
 
     ##################################
