@@ -11,22 +11,18 @@ the image.
 
 Input to RL: x = {Image, Prompt} (which kind of prompt is an open question)
 Output from RL: r(x) = score from CLIP on class "An image of {label}" out of all
-possible labels
-"""
+possible labels.
 
-from rl.reward import CLIPReward
+This script works with both the COD10K and CIFAR-C datasets, as discussed in the blog.
+It defaults to COD10K, and can be changed with the --dataset arg. 
+"""
 from rl.ddpo import ImageDDPOTrainer, I2IDDPOStableDiffusionPipeline
-from data.COD_dataset import build_COD_torch_dataset
-from data.corruption_datasets import (
-    CIFARCorruptionDataset,
-    TinyImageNetCorruptionDataset,
-    build_resnet50_classifier,
-    IMAGENET_MEAN,
-    IMAGENET_STD,
+from rl.utils import (
+    build_data_and_reward,
+    run_classifier_eval,
 )
 
 from trl import DDPOConfig
-from torch.utils.data import DataLoader, Subset
 import numpy as np
 import os
 import torch
@@ -39,110 +35,11 @@ import signal
 from datetime import datetime
 
 
-CIFAR10_LABELS = [
-    "airplane",
-    "automobile",
-    "bird",
-    "cat",
-    "deer",
-    "dog",
-    "frog",
-    "horse",
-    "ship",
-    "truck",
-]
-
-
-class ClassifierReward:
-    """Reward based on a classifier's target logit.
-
-    Supports the same variants as CLIPReward: logit_change and logit_max_margin.
-    """
-
-    def __init__(
-        self,
-        classifier: torch.nn.Module,
-        device: str | torch.device,
-        reward_variant: str = "logit_change",
-        normalize_mean=IMAGENET_MEAN,
-        normalize_std=IMAGENET_STD,
-    ) -> None:
-        if reward_variant not in ["logit_max_margin", "logit_change"]:
-            raise ValueError("Invalid reward_variant for ClassifierReward")
-
-        self.reward_variant = reward_variant
-        self.device = device
-        self.classifier = classifier.to(device)
-        self.classifier.eval()
-        for p in self.classifier.parameters():
-            p.requires_grad_(False)
-
-        mean = torch.tensor(normalize_mean, device=device).view(1, 3, 1, 1)
-        std = torch.tensor(normalize_std, device=device).view(1, 3, 1, 1)
-        self.normalize_mean = mean
-        self.normalize_std = std
-
-    def _normalize(self, images: torch.Tensor) -> torch.Tensor:
-        images = images.to(device=self.device, dtype=torch.float32)
-        images = torch.clamp(images, 0.0, 1.0)
-        return (images - self.normalize_mean) / self.normalize_std
-
-    def _compute_logits(self, images: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            normed = self._normalize(images)
-            logits = self.classifier(normed)
-        return logits
-
-    def _logit_max_margin_reward(
-        self, images: torch.Tensor, labels: torch.Tensor
-    ) -> torch.Tensor:
-        batch_size = images.shape[0]
-        logits = self._compute_logits(images)
-        target_logits = logits[torch.arange(batch_size, device=logits.device), labels]
-
-        mask = torch.ones_like(logits, dtype=torch.bool)
-        mask[torch.arange(batch_size), labels] = False
-        other_logits = logits[mask].view(batch_size, -1)
-        max_other_logits, _ = other_logits.max(dim=1)
-        return target_logits - max_other_logits
-
-    def _logit_change_reward(
-        self,
-        images: torch.Tensor,
-        labels: torch.Tensor,
-        original_images: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        current_logits = self._compute_logits(images)
-        current_target_logits = current_logits[
-            torch.arange(images.shape[0], device=current_logits.device), labels
-        ]
-
-        if original_images is None:
-            return current_target_logits
-
-        original_logits = self._compute_logits(original_images)
-        original_target_logits = original_logits[
-            torch.arange(original_images.shape[0], device=original_logits.device), labels
-        ]
-        return current_target_logits - original_target_logits
-
-    def __call__(
-        self,
-        images: torch.Tensor,
-        labels: torch.Tensor,
-        original_images: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        if self.reward_variant == "logit_max_margin":
-            return self._logit_max_margin_reward(images, labels)
-        elif self.reward_variant == "logit_change":
-            return self._logit_change_reward(images, labels, original_images)
-        else:
-            raise ValueError(f"Unknown reward variant: {self.reward_variant}")
-
-
 def parse_args():
-    parser = argparse.ArgumentParser(description="Run DDPO training for image enhancement.")
-    
+    parser = argparse.ArgumentParser(
+        description="Run DDPO training for image enhancement."
+    )
+
     # Dataset and Trainer Constants
     parser.add_argument(
         "--mode",
@@ -151,6 +48,7 @@ def parse_args():
         default="rl",
         help="Run full RL with diffusion (rl) or just classifier eval (eval_classifier).",
     )
+    ######### CIFAR-10-C ARGS ##########
     parser.add_argument(
         "--dataset",
         type=str,
@@ -161,7 +59,7 @@ def parse_args():
     parser.add_argument(
         "--data_root",
         type=str,
-        default="./datasets",
+        default="./data",
         help="Root directory containing datasets (for CIFAR/Tiny-ImageNet-C).",
     )
     parser.add_argument(
@@ -171,108 +69,97 @@ def parse_args():
         help="Corruption name for CIFAR-C / Tiny-ImageNet-C (e.g., gaussian_noise, fog).",
     )
     parser.add_argument(
-        "--prompt",
-        type=str,
-        default="",
-        help="The prompt template to use ('ORACLE' uses the ground-truth label)."
-    parser.add_argument(
         "--severity",
         type=int,
         default=1,
         help="Corruption severity (1-5) for CIFAR-C / Tiny-ImageNet-C.",
     )
+    ####################################
     parser.add_argument(
         "--prompt",
         type=str,
         default="",
         help="The prompt template to use ('ORACLE' uses the ground-truth label).",
->>>>>>> e3cf566 (Wrap eval into trainer script):rl_trainer.py
     )
     parser.add_argument(
-        "--reward_variant", 
-        type=str, 
-        default="logit_change", 
-        help="The variant of the CLIP reward function to use."
+        "--reward_variant",
+        type=str,
+        default="logit_change",
+        help="The variant of the CLIP reward function to use.",
     )
     parser.add_argument(
-        "--clip_variant", 
-        type=str, 
-        default="openai/clip-vit-base-patch16", 
-        help="CLIP model name to use (default openai/clip-vit-base-patch16)"
+        "--clip_variant",
+        type=str,
+        default="openai/clip-vit-base-patch16",
+        help="CLIP model name to use (default openai/clip-vit-base-patch16)",
     )
     parser.add_argument(
-        "--lpips_weight", 
-        type=float, 
-        default=0.3, 
-        help="Weight of lpips (perceptual similiarty) loss (negative reward) - default 0.3"
+        "--lpips_weight",
+        type=float,
+        default=0.3,
+        help="Weight of lpips (perceptual similiarty) loss (negative reward) - default 0.3",
     )
     parser.add_argument(
-        "--overfit_dset_size", 
-        type=int, 
-        default=128, 
-        help="Number of samples for the training dataset. Set to <= 0 to use the full dataset."
+        "--overfit_dset_size",
+        type=int,
+        default=128,
+        help="Number of samples for the training dataset. Set to <= 0 to use the full dataset.",
     )
     parser.add_argument(
-        "--image_size", 
-        type=int, 
-        default=512, 
-        help="Size of image in preprocessed dataset passed to SD1.5 (default 512 square)"
+        "--image_size",
+        type=int,
+        default=512,
+        help="Size of image in preprocessed dataset passed to SD1.5 (default 512 square)",
     )
     parser.add_argument(
-        "--learning_rate", 
-        type=float, 
-        default=1e-4, 
-        help="Learning rate for the DDPO trainer."
+        "--learning_rate",
+        type=float,
+        default=1e-4,
+        help="Learning rate for the DDPO trainer.",
     )
     parser.add_argument(
-        "--noise_strength", 
-        type=float, 
-        default=0.4, 
-        help="Controls adherence to the original image (1.0 = pure noise, 0.0 = no change)."
+        "--noise_strength",
+        type=float,
+        default=0.4,
+        help="Controls adherence to the original image (1.0 = pure noise, 0.0 = no change).",
     )
     parser.add_argument(
-        "--sample_num_steps", 
-        type=int, 
-        default=50, 
-        help="Diffusion steps to take for sampling."
+        "--sample_num_steps",
+        type=int,
+        default=50,
+        help="Diffusion steps to take for sampling.",
     )
     parser.add_argument(
-        "--use_per_prompt_stat_tracking", 
-        type=lambda x: (str(x).lower() == 'true'), 
-        default=False, 
-        help="Enable per-prompt statistics tracking."
+        "--use_per_prompt_stat_tracking",
+        type=lambda x: (str(x).lower() == "true"),
+        default=False,
+        help="Enable per-prompt statistics tracking.",
     )
     parser.add_argument(
-        "--loader_batch_size", 
-        type=int, 
-        default=64, 
-        help="Batch size for the torch DataLoader (CPU limited)."
+        "--loader_batch_size",
+        type=int,
+        default=64,
+        help="Batch size for the torch DataLoader (CPU limited).",
     )
     parser.add_argument(
-        "--gpu_batch_size", 
-        type=int, 
-        default=4, 
-        help="Batch size per GPU."
+        "--gpu_batch_size", type=int, default=4, help="Batch size per GPU."
     )
     parser.add_argument(
-        "--target_global_batch_size", 
-        type=int, 
-        default=256, 
-        help="Target global batch size for training."
+        "--target_global_batch_size",
+        type=int,
+        default=256,
+        help="Target global batch size for training.",
     )
     parser.add_argument(
-        "--epochs", 
-        type=int, 
-        default=500, 
-        help="Number of training epochs."
+        "--epochs", type=int, default=500, help="Number of training epochs."
     )
     parser.add_argument(
-        "--num_workers", 
-        type=int, 
-        default=4, 
-        help="Number of workers for the DataLoader."
+        "--num_workers",
+        type=int,
+        default=4,
+        help="Number of workers for the DataLoader.",
     )
-    
+
     return parser.parse_args()
 
 
@@ -289,9 +176,7 @@ acc_project_config = ProjectConfiguration(
 )
 # initialize accelerator instance exactly as DDPOTrainer will so they don't conflict
 accelerator = Accelerator(
-    log_with="wandb", 
-    mixed_precision="fp16",
-    project_config=acc_project_config
+    log_with="wandb", mixed_precision="fp16", project_config=acc_project_config
 )
 
 # NOTE: The actual number of diffusion steps take is noise_strength *
@@ -299,187 +184,15 @@ accelerator = Accelerator(
 total_gpu_throughput = args.gpu_batch_size * accelerator.num_processes
 GRAD_ACCUM_STEPS = max(1, int(args.target_global_batch_size / total_gpu_throughput))
 # num batches to avg reward on per epoch -> 256 / target_global_batch_size
-SAMPLE_BATCHES_PER_EPOCH = max(GRAD_ACCUM_STEPS, 4) 
+SAMPLE_BATCHES_PER_EPOCH = max(GRAD_ACCUM_STEPS, 4)
 
 DEVICE = accelerator.device
 
-def build_sd_transform(image_size: int):
-    # Keep images in [0, 1] for SD; classifier reward will normalize internally.
-    return transforms.Compose(
-        [
-            transforms.Resize((image_size, image_size), antialias=True),
-            transforms.ToTensor(),
-        ]
-    )
 
-
-def resolve_label_str_fn(dataset_name: str, tiny_dataset=None):
-    if dataset_name == "CIFAR-10-C":
-        return lambda idx: CIFAR10_LABELS[idx]
-    if dataset_name == "CIFAR-100-C":
-        return lambda idx: str(idx)
-    if dataset_name == "Tiny-ImageNet-C" and tiny_dataset is not None:
-        return lambda idx: tiny_dataset.idx_to_class[idx]
-    return lambda idx: str(idx)
-
-
-def build_data_and_reward(accelerator: Accelerator):
-    device = accelerator.device
-    sd_transform = build_sd_transform(args.image_size)
-
-    if args.dataset == "cod":
-        dataset = build_COD_torch_dataset("train", image_size=args.image_size)
-        label2str = dataset.label2str
-
-        reward_fn = CLIPReward(
-            class_names=dataset.all_classes,
-            device=device,
-            reward_variant=args.reward_variant,
-            model_name=args.clip_variant,
-            lpips_weight=args.lpips_weight,
-        )
-    elif args.dataset in ("cifar10-c", "cifar100-c"):
-        dataset_name = "CIFAR-10-C" if args.dataset == "cifar10-c" else "CIFAR-100-C"
-        if args.corruption is None:
-            raise ValueError("--corruption is required for CIFAR-C datasets")
-
-        dataset = CIFARCorruptionDataset(
-            root=args.data_root,
-            corruption=args.corruption,
-            severity=args.severity,
-            dataset_name=dataset_name,
-            transform=sd_transform,
-        )
-        num_classes = 10 if args.dataset == "cifar10-c" else 100
-        label2str = resolve_label_str_fn(dataset_name)
-
-        classifier, _ = build_resnet50_classifier(
-            num_classes=num_classes,
-            pretrained=not args.no_classifier_pretrained,
-            freeze_backbone=args.classifier_freeze_backbone,
-            device=device,
-        )
-        reward_fn = ClassifierReward(
-            classifier=classifier,
-            device=device,
-            reward_variant=args.reward_variant,
-        )
-    elif args.dataset == "tiny-imagenet-c":
-        if args.corruption is None:
-            raise ValueError("--corruption is required for Tiny-ImageNet-C")
-
-        tiny_root = Path(args.data_root) / "Tiny-ImageNet-C"
-        dataset = TinyImageNetCorruptionDataset(
-            root=tiny_root,
-            corruption=args.corruption,
-            severity=args.severity,
-            transform=sd_transform,
-        )
-        label2str = resolve_label_str_fn("Tiny-ImageNet-C", tiny_dataset=dataset)
-
-        classifier, _ = build_resnet50_classifier(
-            num_classes=200,
-            pretrained=not args.no_classifier_pretrained,
-            freeze_backbone=args.classifier_freeze_backbone,
-            device=device,
-        )
-        reward_fn = ClassifierReward(
-            classifier=classifier,
-            device=device,
-            reward_variant=args.reward_variant,
-        )
-    else:
-        raise ValueError(f"Unknown dataset choice: {args.dataset}")
-
-    train_dataset = dataset
-    if args.overfit_dset_size > 0:
-        train_dataset = Subset(dataset, torch.arange(args.overfit_dset_size))
-        if accelerator.is_main_process:
-            print(f"Using overfit dataset of size: {args.overfit_dset_size}")
-    else:
-        if accelerator.is_main_process:
-            print("Using full training dataset.")
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.loader_batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-    )
-    train_loader = accelerator.prepare(train_loader)
-
-    return dataset, label2str, reward_fn, train_loader
-
-
-def run_classifier_eval() -> None:
-    """Pure classifier evaluation on the chosen corruption dataset.
-
-    Uses the same dataset/transform/classifier construction as RL mode, but
-    bypasses diffusion and just reports CE loss and accuracy.
-    """
-    from corruption_datasets import evaluate_classifier
-
-    # Rebuild data/reward, but we only care about the underlying dataset here.
-    device = DEVICE
-    sd_transform = build_sd_transform(args.image_size)
-
-    if args.dataset in ("cifar10-c", "cifar100-c"):
-        dataset_name = "CIFAR-10-C" if args.dataset == "cifar10-c" else "CIFAR-100-C"
-        if args.corruption is None:
-            raise ValueError("--corruption is required for CIFAR-C datasets")
-        dataset = CIFARCorruptionDataset(
-            root=args.data_root,
-            corruption=args.corruption,
-            severity=args.severity,
-            dataset_name=dataset_name,
-            transform=sd_transform,
-        )
-        num_classes = 10 if args.dataset == "cifar10-c" else 100
-    elif args.dataset == "tiny-imagenet-c":
-        if args.corruption is None:
-            raise ValueError("--corruption is required for Tiny-ImageNet-C")
-        tiny_root = Path(args.data_root) / "Tiny-ImageNet-C"
-        dataset = TinyImageNetCorruptionDataset(
-            root=tiny_root,
-            corruption=args.corruption,
-            severity=args.severity,
-            transform=sd_transform,
-        )
-        num_classes = 200
-    else:
-        raise ValueError("Classifier eval mode is only supported for CIFAR-C and Tiny-ImageNet-C datasets")
-
-    loader = DataLoader(
-        dataset,
-        batch_size=min(args.loader_batch_size, 64),
-        shuffle=False,
-        num_workers=args.num_workers,
-    )
-
-    classifier, _ = build_resnet50_classifier(
-        num_classes=num_classes,
-        pretrained=not args.no_classifier_pretrained,
-        freeze_backbone=args.classifier_freeze_backbone,
-        device=device,
-    )
-
-    metrics = evaluate_classifier(classifier, loader, device=device)
-    print(
-        {
-            "mode": "eval_classifier",
-            "dataset": args.dataset,
-            "corruption": args.corruption,
-            "severity": args.severity,
-            **metrics,
-        }
-    )
-
-
->>>>>>> e3cf566 (Wrap eval into trainer script):rl_trainer.py
 if __name__ == "__main__":
     if args.mode == "eval_classifier":
         # Simple classifier evaluation; no diffusion / DDPO.
-        run_classifier_eval()
+        run_classifier_eval(args, accelerator.device)
         raise SystemExit(0)
 
     if accelerator.is_main_process:
@@ -488,56 +201,39 @@ if __name__ == "__main__":
         print(f"Total instantaneous batch: {total_gpu_throughput}")
         print(f"Gradient Accumulation steps: {GRAD_ACCUM_STEPS}")
         print(f"Effective Global Batch: {total_gpu_throughput * GRAD_ACCUM_STEPS}")
-        
+
     ##################################
     # Construct dataset
     ##################################
-    dataset = build_COD_torch_dataset('train', image_size=args.image_size)
-    
-    if args.overfit_dset_size > 0:
-        # Use a subset for testing/overfitting
-        train_dataset = Subset(dataset, torch.arange(args.overfit_dset_size))
-        if accelerator.is_main_process:
-            print(f"Using overfit dataset of size: {args.overfit_dset_size}")
-    else:
-        # Use the full dataset
-        train_dataset = dataset
-        if accelerator.is_main_process:
-            print("Using full training dataset.")
-            
-    train_loader = DataLoader(
-        train_dataset, 
-        batch_size=args.loader_batch_size, 
-        shuffle=True, 
-        num_workers=args.num_workers
-    )
-    train_loader = accelerator.prepare(train_loader)
+    dataset, label2str, reward_fn, train_loader = build_data_and_reward(accelerator, args)
 
     # (called as ... = [self.prompt_fn() for _ in range(batch_size)])
     def create_data_generator(dataloader, prompt):
         while True:
             for batch in dataloader:
                 images, labels = batch['pixel_values'], batch['label']
-                paths = batch['image_path']
+                paths = batch.get("image_path", batch.get("path", None))
                 # iterature through batch and yield items one by one
                 for i in range(len(images)):
                     image = images[i].to(DEVICE)
                     label = labels[i].item()
                     
                     # unique identifier to work with per_prompt_stat_tracking
-                    unique_path = paths[i]
+                    unique_path = (
+                        paths[i] if paths is not None else f"sample-{label}-{i}"
+                    )
                     
                     # 3 necessary return items
                     metadata = {
                         "label": label,
-                        "label_str": dataset.label2str(label),
+                        "label_str": label2str(label),
                         "original_image": image.clone(),
-                        "unique_path": unique_path
+                        "unique_path": unique_path,
                     }
                     
                     prompt_str : str
                     if prompt == "ORACLE":
-                        prompt_str = f"A clear photo of {dataset.label2str(label)}"
+                        prompt_str = f"A clear photo of {label2str(label)}"
                     else:
                         prompt_str = prompt
                         
@@ -557,18 +253,6 @@ if __name__ == "__main__":
         Return (prompt_str, image_tensor_chw, metadata_dict)
         """
         return next(my_generator)
-
-    ##################################
-    # Define reward
-    ##################################
-    reward_fn = CLIPReward(
-        class_names=dataset.all_classes, 
-        device=DEVICE, 
-        reward_variant=args.reward_variant,
-        model_name=args.clip_variant,
-        lpips_weight=args.lpips_weight
-    )
-
     ##################################
     # Build image hook
     ##################################

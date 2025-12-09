@@ -12,6 +12,20 @@ Making hidden objects classifier-legible through diffusion.
   accelerate launch -m rl.rl_trainer
   ```
 
+### Usage Options
+
+**Modes**
+You can run the trainer in two modes using the `--mode` argument:
+- `rl` (default): Runs the full Reinforcement Learning loop with diffusion.
+- `eval_classifier`: Evaluates the CLIP classifier accuracy on the dataset without diffusion.
+
+**Datasets**
+You can choose the dataset using the `--dataset` argument:
+- `cod` (default): Use the COD10K camouflage dataset.
+- `cifar10-c`: Use the CIFAR-10-C corruption dataset. Requires `--corruption` and `--severity` arguments.
+
+> **Note**: Currently, `eval_classifier` mode only supports `cifar10-c` and `tiny-imagenet-c`, not `cod`.
+
 During training or at the end, upload checkpoints with:
 
 ```bash
