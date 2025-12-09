@@ -96,7 +96,7 @@ def parse_args():
     parser.add_argument(
         "--lpips_weight",
         type=float,
-        default=0.3,
+        default=0.0,
         help="Weight of lpips (perceptual similiarty) loss (negative reward) - default 0.3",
     )
     parser.add_argument(
@@ -109,7 +109,8 @@ def parse_args():
         "--image_size",
         type=int,
         default=512,
-        help="Size of image in preprocessed dataset passed to SD1.5 (default 512 square)",
+        help="Size of image in preprocessed dataset passed to SD1.5 (default 512 square). \
+            Recommend 128x128 for CIFAR (originally 32x32) and 512x512 for COD10K.",
     )
     parser.add_argument(
         "--learning_rate",
@@ -217,12 +218,12 @@ if __name__ == "__main__":
                 for i in range(len(images)):
                     image = images[i].to(DEVICE)
                     label = labels[i].item()
-                    
+
                     # unique identifier to work with per_prompt_stat_tracking
                     unique_path = (
                         paths[i] if paths is not None else f"sample-{label}-{i}"
                     )
-                    
+
                     # 3 necessary return items
                     metadata = {
                         "label": label,
@@ -230,23 +231,21 @@ if __name__ == "__main__":
                         "original_image": image.clone(),
                         "unique_path": unique_path,
                     }
-                    
+
                     prompt_str : str
                     if prompt == "ORACLE":
                         prompt_str = f"A clear photo of {label2str(label)}"
                     else:
                         prompt_str = prompt
-                        
+
                     # always add id
                     if args.use_per_prompt_stat_tracking: 
                         prompt_str = f"{prompt_str} id:{unique_path}"
-                    
+
                     # prompt + image are analogous to just prompt within DDPOTrainer
                     yield prompt_str, image, metadata
-                    
 
     my_generator = create_data_generator(train_loader, args.prompt) 
-
 
     def my_image_loader():
         """
@@ -277,26 +276,26 @@ if __name__ == "__main__":
         """
         if not accelerator.is_main_process:
             return 
-        
+
         pipeline.vae.eval()
         pipeline.unet.eval()
-        
+
         device = DEVICE
         input_image = val_image.to(device=device, dtype=pipeline.vae.dtype)
-        
-        # NOTE: Ensure input_image is [0, 1] before doing this. 
+
+        # NOTE: Ensure input_image is [0, 1] before doing this.
         # If your dataset outputs [-1, 1], remove the "2.0 * ... - 1.0"
         vae_input = 2.0 * input_image - 1.0
-        
+
         # encode & noise
         with torch.no_grad():
             init_latents = pipeline.vae.encode(vae_input).latent_dist.sample()
             init_latents *= 0.18215
             noise = torch.randn_like(init_latents)
-            
+
             timesteps = torch.tensor([int(1000 * noise_strength)], device=device).long()
             noisy_latents = pipeline.scheduler.add_noise(init_latents, noise, timesteps)
-            
+
             prompt_ids = pipeline.tokenizer(
                 [val_prompt], 
                 return_tensors="pt", 
@@ -304,7 +303,7 @@ if __name__ == "__main__":
                 truncation=True, 
                 max_length=77
             ).input_ids.to(device)
-            
+
             prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
             uncond_ids = pipeline.tokenizer(
                 [""],
@@ -318,7 +317,7 @@ if __name__ == "__main__":
                 uncond_embeds = pipeline.text_encoder(uncond_ids)[0]
 
             neg_prompt_embeds = uncond_embeds.repeat(prompt_embeds.shape[0], 1, 1)
-            
+
             output = pipeline(
                 prompt_embeds=prompt_embeds,
                 negative_prompt_embeds=neg_prompt_embeds,
@@ -329,22 +328,22 @@ if __name__ == "__main__":
                 latents=noisy_latents,
                 starting_step_ratio=noise_strength
             )   
-            
+
             after_img_pil = output.images[0]
-        
+
         # Convert PIL -> Tensor (1, C, H, W) for reward calculation
         after_img_tensor = torch.from_numpy(np.array(after_img_pil)).permute(2, 0, 1).unsqueeze(0).float() / 255.0
         after_img_tensor = after_img_tensor.to(device)
-    
+
         # Calculate the reward ONLY for the after image
         rewards, _ = reward_fn(after_img_tensor, [val_prompt], [val_meta])
         after_reward = rewards[0].item()
-        
+
         after_str = val_prompt
         if args.use_per_prompt_stat_tracking:
             # I just don't wanna see the big ID think
             after_str = f"{val_prompt.split(' id:')[0]} id:..."
-        
+
         wandb.log({
             "validation/before_vs_after": [
                 # Use cached numpy image and cached reward
@@ -353,7 +352,6 @@ if __name__ == "__main__":
                 wandb.Image(after_img_pil, caption=f"After (RL, prompt='{after_str}', r={after_reward:.2f})")
             ]
         }, step=wandb_step)
-
 
     ##################################
     # Configuration
@@ -419,10 +417,29 @@ if __name__ == "__main__":
         debug_hook=validation_hook,
         # DDPOTrainer builds its own Accelerator instance
     )
-     
+
     # add custom args to wandb config
     if accelerator.is_main_process:
         wandb.config.update(vars(args))
+
+    ##################################
+    # Fix accelerate save_state bug
+    ##################################
+    original_save_state = trainer.accelerator.save_state
+
+    def patched_save_state(output_dir=None, **kwargs):
+        if output_dir is None:
+            # Force the path if it's missing
+            output_dir = os.path.join(
+                config.project_kwargs["project_dir"], "checkpoints"
+            )
+
+        # Ensure the directory exists (the root cause of your error)
+        os.makedirs(output_dir, exist_ok=True)
+
+        return original_save_state(output_dir=output_dir, **kwargs)
+
+    trainer.accelerator.save_state = patched_save_state
 
     ##################################
     # Begin training!
@@ -431,14 +448,14 @@ if __name__ == "__main__":
     if accelerator.is_main_process:
         print("Commencing training!")
         pprint(args.__dict__)
-    
+
     def sigint_handler(signum, frame):
         if accelerator.is_main_process:
             print("\nRecieved interrupt signal - saving final checkpoint...")
             interrupt_dir = os.path.join(config.project_kwargs["project_dir"], f"checkpoint_INTERRUPT-{now_str}")
             trainer.accelerator.save_state(output_dir=interrupt_dir)
         os._exit(0)
-        
+
     signal.signal(signal.SIGINT, sigint_handler)
-    
+
     trainer.train()
