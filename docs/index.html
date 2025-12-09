@@ -639,13 +639,184 @@
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
 			<h1>Task and Dataset Details (Luc)</h1>
-			Details about tasks & motivations (hector will already do some of this
-			in intro, but doesn't hurt to remind / go into more detail) for
-			camouflauge, you could say interpretability for cifar, you could say
-			leveraging the denoising capabilities of diffusion models to better
-			handle corruptions (something abt how they're better for it) then
-			details about the datasets used, any filtering applied, and how we
-			gained access (citations)
+			We looked for tasks where diffusion could 'assist' the classifier,
+			by clearing out noise or enhancing the signal.
+			Therefore, we looked for tasks with visually occluded images.
+			
+			<h2 id="task_data_camouflage">Camouflage Removal on COD10K</h2>
+			One primary example of this is the COD10K dataset <a href="#ref_fan" class="cite"></a>,
+			which contains images of camouflaged animals in natural settings.
+			These images can confuse the classifier, as the animals are
+			often blended into the background, such as the deer in the
+			brush as can be seen below.
+			
+			
+			<img src="./images/cod10k-example-deer.jpg" style="width: 80%; height: auto;" />
+			
+			The goal is to use diffusion to enhance the visibility and
+			detectability of these camouflaged animal,
+			thereby increasing the accuracy of a frozen classifier.
+			Additionally, the result of the diffusion would likely
+			be very interpretable, highlighting the areas of the image
+			that correspond to the animal.
+			
+			<h2 id="task_data_cifar">Corruption Removal on CIFAR-10-C</h2>
+			Another task we explored is corruption removal on the CIFAR-10-C
+			dataset <a href="#ref_hendrycks" class="cite"></a>, which contains
+			images from CIFAR-10 that have been corrupted with various
+			types of noise and blur, including Gaussian noise, motion blur.
+			An example image for the truck label, corrupted with gaussian
+			noise is shown below.
+			
+			<img src="./images/cifar10c-example-truck-gaussian-noise.png" style="width: 50%; height: auto;" />
+			
+			The dataset was accessed from the <a href="https://github.com/hendrycks/robustness">paper's GitHub repository</a>.
+			
+			To assess the baseline performance of CLIP on the different
+			noise types, we evaluated its zero-shot classification accuracy
+			on each corruption category. The results for the CIFAR-10-C
+			corruption types we considered, with the highest severity (5),
+			are summarized in the following table:
+			
+			<table border="1" style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+					<th><b>Corruption Type</b></th>
+					<th><b>CLIP Accuracy (%)</b></th>
+				</tr>
+				<tr>
+					<td>Glass Blur</td>
+					<td>43.0</td>
+				</tr>
+				<tr>
+					<td>Gaussian Noise</td>
+					<td>43.0</td>
+				</tr>
+				<tr>
+					<td>Speckle Noise</td>
+					<td>50.0</td>
+				</tr>
+				<tr>
+					<td>Shot Noise</td>
+					<td>48.0</td>
+				</tr>
+				<tr>
+					<td>Elastic Transform</td>
+					<td>56.0</td>
+				</tr>
+				<tr>
+					<td>Pixelate</td>
+					<td>58.0</td>
+				</tr>
+				<tr>
+					<td>Contrast</td>
+					<td>62.0</td>
+				</tr>
+				<tr>
+					<td>Impulse Noise</td>
+					<td>61.0</td>
+				</tr>
+				<tr>
+					<td>JPEG Compression</td>
+					<td>60.0</td>
+				</tr>
+				<tr>
+					<td>Gaussian Blur</td>
+					<td>69.0</td>
+				</tr>
+				<tr>
+					<td>Motion Blur</td>
+					<td>70.0</td>
+				</tr>
+			</table>
+			
+			In general, the small size of the image and the resulting severity
+			of the corruptions makes the images difficult to interpret.
+			However, the nature of diffusion models as denoisers suggests that
+			the diffusion prior could help recover some of the lost structure,
+			improving classification accuracy.
+			
+			One particular concern with the CIFAR-10 dataset,
+			is the significantly smaller image size compared to the usual
+			input dimensions to stable diffusion (32x32 vs 512x512).
+			
+			
+			<h2 id="task_data_imagenet">Corruption Removal on ImageNet-C</h2>
+			The address this concern, we also explored corruption removal
+			on the ImageNet-C dataset <a href="#ref_hendrycks" class="cite"></a>,
+			which contains images from ImageNet that have been corrupted.
+			Similar to CIFAR-10-C, the corruptions include Gaussian noise,
+			motion blur, and glass blur. An example of an image labeled as
+			"ostrich, Struthio camelus", corrupted with max severity (5) fog
+			is shown below.
+			
+			<img src="./images/imagenetc-example-ostrich-fog-severity5.jpeg" style="width: 50%; height: auto;" />
+			
+			The dataset was accessed from the <a href="https://github.com/hendrycks/robustness">paper's GitHub repository</a>.
+			
+			
+			Again, like with CIFAR-10-C, to assess the baseline performance
+			of CLIP on each candidate noise type, we evaluated its zero-shot.
+			The results for the ImageNet-C corruption types we considered,
+			with the highest severity (5), are summarized in the following table:
+			
+			<table border="1" style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+					<th colspan="2"><b>ImageNet-C Corruption Types (Severity 5)</b></th>
+				</tr>
+				<tr>
+					<td>Impulse Noise</td>
+					<td>8.9%</td>
+				</tr>
+				<tr>
+					<td>Glass Blur</td>
+					<td>10.1%</td>
+				</tr>
+				<tr>
+					<td>Gaussian Noise</td>
+					<td>14.1%</td>
+				</tr>
+				<tr>
+					<td>Shot Noise</td>
+					<td>16.6%</td>
+				</tr>
+				<tr>
+					<td>Fog</td>
+					<td>25.1%</td>
+				</tr>
+				<tr>
+					<td>Pixelate</td>
+					<td>28.4%</td>
+				</tr>
+				<tr>
+					<td>Elastic Transform</td>
+					<td>29.7%</td>
+				</tr>
+				<tr>
+					<td>Zoom Blur</td>
+					<td>31.8%</td>
+				</tr>
+				<tr>
+					<td>Snow</td>
+					<td>35.9%</td>
+				</tr>
+				<tr>
+					<td>Motion Blur</td>
+					<td>36.5%</td>
+				</tr>
+				<tr>
+					<td>JPEG Compression</td>
+					<td>38.2%</td>
+				</tr>
+				<tr>
+					<td>Frost</td>
+					<td>39.3%</td>
+				</tr>
+			</table>
+			
+			Having a larger image size, while still also having
+			a challenging but more noise-like corruption profile,
+			makes this dataset a good candidate for diffusion-based
+			denoising to help classification.
 		</div>
 		<div class="margin-right-block"></div>
 	</div>
