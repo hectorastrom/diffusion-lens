@@ -49,6 +49,15 @@
 			font-weight: 900;
 		}
 
+		.heavy-caption {
+			font-size: 1.1em;
+			font-weight: bold;
+			margin-top: 15px;
+			margin-bottom: 30px;
+			color: black;
+			text-align: center;
+		}
+
 		body {
 			background-color: #f5f9ff;
 		}
@@ -406,13 +415,10 @@
 			</div>
 		</div>
 		<div class="main-content-block">
-			<img src="./images/train_pipelines.png" style="width: 80%; height: auto;" />
-			<p class="image-caption">SFT and RL training pipelines</p>
+			<img src="./images/overfit_batfish.png" style="width: 80%; height: auto;" />
+			<p class="heavy-caption">Example of overfitting in RL-trained model</p>
 		</div>
-		<div class="margin-right-block"><strong>Figure 1</strong><br /><br />In the SFT pipeline, gradient updates are free to backpropagate through a
-		frozen classifier. Conversely, in RL parameter updates are faciliated
-		through DDPO, where the reward is a weighted combination of classifier
-		confidence and perceptual drift. </div>
+		<div class="margin-right-block"><strong>Figure 1</strong></div>
 	</div>
 
 	<div class="content-margin-container" id="intro">
@@ -470,8 +476,9 @@
 			<br><br>
 			All code for this experiement is available <a
 			href="https://github.com/hectorastrom/diffusion-lens">here.</a>
-			For readers to build on this work, we also provide a standalone implementation of the ImageDDPOTrainer
-			<a href="https://github.com/hectorastrom/imageddpo">here.</a>
+			For readers to build on this work, we also provide a standalone
+			package implementing ImageDDPO available with <code>pip
+			install imageddpo</code>.
 		</div>
 		<div class="margin-right-block">
 		</div>
@@ -636,6 +643,25 @@
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
 			<h1>Methods</h1>
+		</div>
+		<div class="margin-right-block"></div>
+	</div>
+
+	<div class="content-margin-container">
+		<div class="margin-left-block"></div>
+		<div class="main-content-block">
+			<img src="./images/train_pipelines.png" style="width: 80%; height: auto;" />
+			<p class="heavy-caption">SFT and RL training pipelines</p>
+		</div>
+		<div class="margin-right-block"><strong>Figure 2</strong><br /><br />In the SFT pipeline, gradient updates are free to backpropagate through a
+		frozen classifier. Conversely, in RL parameter updates are faciliated
+		through DDPO, where the reward is a weighted combination of classifier
+		confidence and perceptual drift. </div>
+	</div>
+
+	<div class="content-margin-container" id="methods">
+		<div class="margin-left-block"></div>
+		<div class="main-content-block">
 			<h2 id="methods_imageddpo">ImageDDPOTrainer (Hector)</h2>
 			Details on the ImageDDPOTrainer; what was required to implement it;
 			where it can be accessed and adapted for different tasks
@@ -958,7 +984,7 @@
 				'Good' Generations
 			</p>
 		</div>
-		<div class="margin-right-block"><strong>Figure 2</strong></div>
+		<div class="margin-right-block"><strong>Figure 3</strong></div>
 	</div>
 
 	<div class="content-margin-container">
@@ -1035,7 +1061,7 @@
 				'Bad' Generations
 			</p>
 		</div>
-		<div class="margin-right-block"><strong>Figure 3</strong></div>
+		<div class="margin-right-block"><strong>Figure 4</strong></div>
 	</div>
 
 	<div class="content-margin-container" id="results">
@@ -1090,7 +1116,7 @@
 				</div>
 			</div>
 		</div>
-		<div class="margin-right-block"><strong>Figure 4</strong></div>
+		<div class="margin-right-block"><strong>Figure 5</strong></div>
 	</div>
 
 	<div class="content-margin-container" id="results">
@@ -1099,7 +1125,7 @@
 
 			<p>
 				We also compared performance across different prompt
-				strategies. Figure 4 shows validation loss and accuracy curves for models trained with
+				strategies. Figure 5 shows validation loss and accuracy curves for models trained with
 				custom prompts ("De-camouflage the animal", "Increase edge sharpness and contrast",
 				"Enhance visibility of camouflaged animal") versus the no-prompt baseline. Despite
 				the semantic differences in prompt wording, all custom prompts performed similarly to
@@ -1184,7 +1210,7 @@
 				ORACLE Prompt Generations
 			</p>
 		</div>
-		<div class="margin-right-block"><strong>Figure 5</strong></div>
+		<div class="margin-right-block"><strong>Figure 6</strong></div>
 	</div>
 
 	<div class="content-margin-container" id="results">
@@ -1197,9 +1223,15 @@
 				unrecognizable from the original image 
 				to hack the reward for the desired class. 
 			</p>
+		</div>
+		<div class="margin-right-block"></div>
+	</div>
+
+	<div class="content-margin-container" id="results">
+		<div class="margin-left-block"></div>
+		<div class="main-content-block">
 
 			<h4>RL-Trained Model Results</h4>
-			hector fill in with your before and after images
 		</div>
 		<div class="margin-right-block"></div>
 	</div>
@@ -1207,157 +1239,21 @@
 	<div class="content-margin-container">
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
-			<div style="display: flex; flex-wrap: wrap; gap: 15px; margin: 20px 0; justify-content: center;">
-				<!-- Pair 1 -->
-				<div style="flex: 0 0 auto; width: 280px;">
-					<div style="display: flex; gap: 8px;">
-						<div style="flex: 1;">
-							<img src="./images/good_no_prompt_sft_before_1.png" alt="Before: Original camouflaged image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>Before</strong><br />
-								Grasshopper
-							</p>
-						</div>
-						<div style="flex: 1;">
-							<img src="./images/good_no_prompt_sft_after_1.png" alt="After: Enhanced image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>After</strong><br />
-								Grasshopper
-							</p>
-						</div>
-					</div>
-				</div>
-
-				<!-- Pair 2 -->
-				<div style="flex: 0 0 auto; width: 280px;">
-					<div style="display: flex; gap: 8px;">
-						<div style="flex: 1;">
-							<img src="./images/original_2.png" alt="Before: Original camouflaged image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>Before</strong><br />
-								Frog
-							</p>
-						</div>
-						<div style="flex: 1;">
-							<img src="./images/no_prompt_sft_2.png" alt="After: Enhanced image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>After</strong><br />
-								Frog
-							</p>
-						</div>
-					</div>
-				</div>
-
-				<!-- Pair 3 (template) -->
-				<div style="flex: 0 0 auto; width: 280px;">
-					<div style="display: flex; gap: 8px;">
-						<div style="flex: 1;">
-							<img src="./images/original_3.png" alt="Before: Original camouflaged image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>Before</strong><br />
-								Spider
-							</p>
-						</div>
-						<div style="flex: 1;">
-							<img src="./images/no_prompt_sft_3.png" alt="After: Enhanced image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>After</strong><br />
-								Spider
-							</p>
-						</div>
-					</div>
-				</div>
-			</div>
-
-			<div style="display: flex; flex-wrap: wrap; gap: 15px; margin: 20px 0; justify-content: center;">
-				<!-- Failure Pair 1 -->
-				<div style="flex: 0 0 auto; width: 280px;">
-					<div style="display: flex; gap: 8px;">
-						<div style="flex: 1;">
-							<img src="./images/fail_no_prompt_sft_before_4.png" alt="Before: Original camouflaged image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>Before</strong><br />
-								Turtle<br />
-							</p>
-						</div>
-						<div style="flex: 1;">
-							<img src="./images/fail_no_prompt_sft_after_4.png" alt="After: Enhanced image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>After</strong><br />
-								Owl<br />
-							</p>
-						</div>
-					</div>
-				</div>
-
-				<!-- Failure Pair 2 -->
-				<div style="flex: 0 0 auto; width: 280px;">
-					<div style="display: flex; gap: 8px;">
-						<div style="flex: 1;">
-							<img src="./images/fail_no_prompt_sft_before_5.png" alt="Before: Original camouflaged image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>Before</strong><br />
-								Snake<br />
-							</p>
-						</div>
-						<div style="flex: 1;">
-							<img src="./images/fail_no_prompt_sft_after_5.png" alt="After: Enhanced image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>After</strong><br />
-								Frog<br />
-							</p>
-						</div>
-					</div>
-				</div>
-
-				<!-- Failure Pair 3 -->
-				<div style="flex: 0 0 auto; width: 280px;">
-					<div style="display: flex; gap: 8px;">
-						<div style="flex: 1;">
-							<img src="./images/fail_no_prompt_sft_before_6.png" alt="Before: Original camouflaged image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>Before</strong><br />
-								Spider<br />
-							</p>
-						</div>
-						<div style="flex: 1;">
-							<img src="./images/fail_no_prompt_sft_after_6.png" alt="After: Enhanced image"
-								style="width: 100%; border: 1px solid #ddd;" />
-							<p class="image-caption-small">
-								<strong>After</strong><br />
-								Moth<br />
-							</p>
-						</div>
-					</div>
-				</div>
-			</div>
+			<img src="./images/rl_reward_graph.png" style="width: 80%; height: auto;" />
+			<p class="heavy-caption">Comparing Reward Progress of Different
+			Training Configurations</p>
 		</div>
-		<div class="margin-right-block"><strong>Figure 6</strong></div>
+		<div class="margin-right-block"><strong>Figure 7</strong><br /><br
+		/>With only a single image and ORACLE prompt, the blue run sanity-checks
+		our training setup's ability to overfit. As we remove these 'training
+		wheels', these runs demonstrate see that reward climbing is much slower
+		with larger training datasets (red run) and null prompts (green
+		run).</div>
 	</div>
 
 	<div class="content-margin-container" id="results">
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
-
-
-			<p style="font-size: 0.9em; color: #666; font-style: italic; margin-top: 10px;">
-				[Optional: Add more example pairs or a note about what visual changes the diffusion
-				model makes, e.g., "The diffusion model enhances edge features and increases contrast
-				in regions where the camouflaged object blends with the background."]
-			</p>
-
-
 			<h2>CIFAR-C Task (Luc or Hector - whoever trains)</h2>
 			Comparing clip vs. clip+diffusion RL for CIFAR-C
 		</div>
@@ -1397,8 +1293,7 @@
 				subject, it denoises toward the wrong class distribution,
 				effectively hallucinating a high-quality but semantically
 				incorrect object. This failure mode is evidenced by the 'Bad'
-				generations in Figure 3.
-				<!-- TODO: check if this is the right figure -->
+				generations in Figure 4.
 			</p>
 			<p>
 				From an optimization perspective, this approach also struggles with credit assignment.
