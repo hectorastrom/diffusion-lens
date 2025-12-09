@@ -10,6 +10,7 @@ wheels/
 # Project files
 data/*
 !data/COD_dataset.py
+!data/corruption_datasets.py
 !data/README.md
 !data/__init__.py
 exploration/outputs/*
