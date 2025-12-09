@@ -81,6 +81,41 @@ def _load_tiny_imagenet_wnid_to_label(clean_root: Path) -> Dict[str, str]:
     return mapping
 
 
+def _load_imagenet_wnid_to_label(clean_root: Path) -> Dict[str, str]:
+    """Load ImageNet-1K wnid -> human-readable label mapping.
+
+    Expects ``LOC_synset_mapping.txt`` in the given directory, with lines of
+    the form ``wnid<space>syn1, syn2, ...``. We take the first synonym as a
+    concise class name. If the file is missing or malformed, returns an empty
+    dict and callers should fall back to using raw WNIDs.
+    """
+
+    mapping: Dict[str, str] = {}
+    mapping_path = clean_root / "LOC_synset_mapping.txt"
+
+    if not mapping_path.exists():
+        return mapping
+
+    try:
+        with mapping_path.open("r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                parts = line.split(" ", 1)
+                if len(parts) != 2:
+                    continue
+                wnid, rest = parts
+
+                human = rest.split(",")[0].strip()
+                mapping[wnid] = human
+    except Exception:
+        return mapping
+
+    return mapping
+
+
 def build_sd_transform(image_size: int, augment: bool = False):
     """
     Builds the image transform for Stable Diffusion.
@@ -190,6 +225,34 @@ def build_data_and_reward(accelerator: Accelerator, args: Any):
             model_name=args.clip_variant,
             lpips_weight=args.lpips_weight,
         )
+    elif args.dataset == "imagenet-c":
+        if args.corruption is None:
+            raise ValueError("--corruption is required for ImageNet-C")
+
+        imagenet_root = Path(args.data_root) / "ImageNet-C"
+        dataset = TinyImageNetCorruptionDataset(
+            root=imagenet_root,
+            corruption=args.corruption,
+            severity=args.severity,
+            transform=sd_transform,
+        )
+
+        clean_root = Path(args.data_root) / "ImageNet-1000"
+        wnid_to_label = _load_imagenet_wnid_to_label(clean_root)
+
+        def label2str(idx: int) -> str:  # type: ignore[redefined-outer-name]
+            wnid = dataset.idx_to_class[idx]
+            return wnid_to_label.get(wnid, wnid)
+
+        class_names = [label2str(i) for i in range(len(dataset.idx_to_class))]
+
+        reward_fn = CLIPReward(
+            class_names=class_names,
+            device=device,
+            reward_variant=args.reward_variant,
+            model_name=args.clip_variant,
+            lpips_weight=args.lpips_weight,
+        )
     else:
         raise ValueError(f"Unknown dataset choice: {args.dataset}")
 
@@ -255,8 +318,32 @@ def run_classifier_eval(args: Any, device: torch.device) -> None:
         for i in range(len(dataset.idx_to_class)):
             wnid = dataset.idx_to_class[i]
             class_names.append(wnid_to_label.get(wnid, wnid))
+    elif args.dataset == "imagenet-c":
+        if args.corruption is None:
+            raise ValueError("--corruption is required for ImageNet-C")
+        imagenet_root = Path(args.data_root) / "ImageNet-C"
+        dataset = TinyImageNetCorruptionDataset(
+            root=imagenet_root,
+            corruption=args.corruption,
+            severity=args.severity,
+            transform=sd_transform,
+        )
+        # Human-readable ImageNet-1K labels, falling back to WNIDs
+        clean_root = Path(args.data_root) / "ImageNet-1000"
+        wnid_to_label = _load_imagenet_wnid_to_label(clean_root)
+        class_names = []
+        for i in range(len(dataset.idx_to_class)):
+            wnid = dataset.idx_to_class[i]
+            class_names.append(wnid_to_label.get(wnid, wnid))
     else:
-        raise ValueError("Classifier eval mode is only supported for CIFAR-C and Tiny-ImageNet-C datasets")
+        raise ValueError(
+            "Classifier eval mode is only supported for CIFAR-C, Tiny-ImageNet-C, and ImageNet-C datasets"
+        )
+
+    # Optionally restrict evaluation to a small subset for speed
+    if getattr(args, "overfit_dset_size", 0) and args.overfit_dset_size > 0:
+        max_size = min(args.overfit_dset_size, len(dataset))
+        dataset = Subset(dataset, torch.arange(max_size))
 
     loader = DataLoader(
         dataset,
