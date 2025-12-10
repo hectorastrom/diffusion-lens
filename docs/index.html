@@ -420,26 +420,25 @@
 		<div class="margin-left-block">
 			<div id="outline-nav">
 				<b style="font-size: 16px">Outline</b><br /><br />
-				<a href="#intro" style="font-size: 16px">Introduction</a><br /><br />
+				<a href="#intro" style="font-size: 16px">Introduction</a><br />
+				<a href="#roadmap" style="font-size: 14px; margin-left: 15px;">Roadmap</a><br /><br />
 				<a href="#preliminaries" style="font-size: 16px">Preliminaries</a><br />
 				<a href="#preliminaries_diffusion" style="font-size: 14px; margin-left: 15px;">Diffusion</a><br />
-				<a href="#preliminaries_pg" style="font-size: 14px; margin-left:
-				15px;">RL and Policy Gradient Methods</a><br />
+				<a href="#preliminaries_pg" style="font-size: 14px; margin-left: 15px;">RL & Policy Gradients</a><br />
 				<a href="#preliminaries_ddpo" style="font-size: 14px; margin-left: 15px;">DDPOTrainer</a><br /><br />
-				<a href="#task_data" style="font-size: 16px">Task and Data Description</a><br />
+				<a href="#task_data" style="font-size: 16px">Task & Data</a><br />
 				<a href="#task_data_camouflage" style="font-size: 14px; margin-left: 15px;">COD10K</a><br />
 				<a href="#task_data_cifar" style="font-size: 14px; margin-left: 15px;">CIFAR-10-C</a><br />
 				<a href="#task_data_imagenet" style="font-size: 14px; margin-left: 15px;">ImageNet-C</a><br /><br />
 				<a href="#methods" style="font-size: 16px">Methods</a><br />
-				<a href="#methods_imageddpo" style="font-size: 14px; margin-left: 15px;">ImageDDPO</a><br />
-				<a href="#methods_rl" style="font-size: 14px; margin-left: 15px;">RL Methods</a><br />
 				<a href="#methods_design" style="font-size: 14px; margin-left: 15px;">Design Choices</a><br />
-				<a href="#methods_sft" style="font-size: 14px; margin-left: 15px;">Supervised Fine-Tuning</a><br />
+				<a href="#methods_rl" style="font-size: 14px; margin-left: 15px;">RL Methods</a><br />
+				<a href="#methods_sft" style="font-size: 14px; margin-left: 15px;">SFT</a><br />
+				<a href="#methods_experiments" style="font-size: 14px; margin-left: 15px;">Experiments</a><br />
 				<a href="#methods_benchmarking" style="font-size: 14px; margin-left: 15px;">Evaluation</a><br /><br />
 				<a href="#results" style="font-size: 16px">Results</a><br />
 				<a href="#results_camouflage" style="font-size: 14px; margin-left: 15px;">Camouflage Task</a><br />
-				<a href="#results_cifar" style="font-size: 14px; margin-left:
-				15px;">Corruption Task</a><br /><br />
+				<a href="#results_cifar" style="font-size: 14px; margin-left: 15px;">Corruption Task</a><br /><br />
 				<a href="#discussion" style="font-size: 16px">Discussion</a><br />
 				<a href="#discussion_failure_analysis" style="font-size: 14px; margin-left: 15px;">Failure Analysis</a><br />
 				<a href="#discussion_extensions" style="font-size: 14px; margin-left: 15px;">Extensions</a><br /><br />
@@ -511,7 +510,7 @@
 	
 			<br><br>
 	
-			<h2>Roadmap of Our Approach</h2>
+			<h2 id="roadmap">Roadmap of Our Approach</h2>
 			<ol>
 				<li>
 					<strong>Initial plan: RL for black-box optimization.</strong>
@@ -656,7 +655,7 @@
 			(compared to reward).
 			<br><br>
 
-			In code (e.g. PyTorch) we implement this using autograd by
+			In code (e.g. PyTorch), we implement this using autograd by
 			minimizing the negative objective: \(
 			\mathcal{L}^{\text{PG}}=-\mathcal{J}^{\text{PG}} \).
 			<br><br>
@@ -671,15 +670,15 @@
 			<strong>DDPO</strong> <a href="#ref_black" class="cite"></a> frames
 			the diffusion model as an agent in an environment, where the action
 			is the diffusion step, the state is the partially denoised image +
-			text promptconditioning, and the reward can be any function (e.g.
+			text prompt conditioning, and the reward can be any function (e.g.
 			aesthetic quality, compressibility, classification accuracy, etc.). 
 
 			<br><br>
 
 			The HuggingFace TRL library <a href="#ref_trl_ddpo" class="cite"></a>
 			provides a (now
-			deprecated) <code>DDPOTrainer</code> class to implement this learning algorithm.
-			class to implement this learning algorithm. At a high level it works
+			deprecated) <code>DDPOTrainer</code> class to implement this
+			learning algorithm. At a high level it works
 			as follows:
 			<ol>
 				<li>Initialize trainer with pipeline,
@@ -699,9 +698,10 @@
 			</ol>
 
 			In this work, we adapt the DDPOTrainer class to support image
-			inputs, so that the Stable Diffusion can be used as an image editor,
-			rather than just image generators. In the <a href="#methods_imageddpo">methods</a> section, we'll
-			discuss the modifications we made to the DDPOTrainer class. 
+			inputs, so that Stable Diffusion can be used as an image editor,
+			rather than just an image generator. In the <a
+			href="#methods_imageddpo">methods</a> section, we'll discuss the
+			modifications we made to the DDPOTrainer class. 
 		</div>
 		<div class="margin-right-block">
 		</div>
@@ -738,7 +738,7 @@
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
 			The goal is to use diffusion to enhance the visibility and
-			detectability of these camouflaged animal,
+			detectability of these camouflaged animals,
 			thereby increasing the accuracy of a frozen classifier.
 			Additionally, the result of the diffusion would likely
 			be very interpretable, highlighting the areas of the image
@@ -748,8 +748,8 @@
 			Another task we explored is corruption removal on the CIFAR-10-C
 			dataset <a href="#ref_hendrycks" class="cite"></a>, which contains
 			images from CIFAR-10 that have been corrupted with various
-			types of noise and blur, including Gaussian noise, motion blur.
-			An example image for the truck label, corrupted with gaussian
+			types of noise and blur, including Gaussian noise and motion blur.
+			An example image for the truck label, corrupted with Gaussian
 			noise is shown below.
 		</div>
 		<div class="margin-right-block"></div>
@@ -837,13 +837,12 @@
 			the diffusion prior could help recover some of the lost structure,
 			improving classification accuracy.
 			
-			One particular concern with the CIFAR-10 dataset,
-			is the significantly smaller image size compared to the usual
+			One particular concern with the CIFAR-10 dataset is the significantly smaller image size compared to the usual
 			input dimensions to stable diffusion (32x32 vs 224x224).
 			
 			
 			<h2 id="task_data_imagenet">Corruption Removal on ImageNet-C</h2>
-			The address this concern, we also explored corruption removal
+			To address this concern, we also explored corruption removal
 			on the ImageNet-C dataset <a href="#ref_hendrycks" class="cite"></a>,
 			which contains images from ImageNet that have been corrupted.
 			Similar to CIFAR-10-C, the corruptions include Gaussian noise,
@@ -871,7 +870,7 @@
 			ImageNet-1000 labels and were downloaded separately from <a href="https://www.image-net.org/download.php">ImageNet</a>.
 			
 			Again, like with CIFAR-10-C, to assess the baseline performance
-			of CLIP on each candidate noise type, we evaluated its zero-shot.
+			of CLIP on each candidate noise type, we evaluated its zero-shot accuracy.
 			The results for the ImageNet-C corruption types we considered,
 			with the highest severity (5), are summarized in the following table:
 			
@@ -998,7 +997,7 @@
 	
 				<li>
 					<strong>LoRA Adapter.</strong>
-					Following new promising work on the performance of LoRA, <a href="#ref_schulman_lora" class="cite"></a>, we fine-tuned the UNet using a LoRA adapter to keep training lightweight and isolate learned behavior to
+					Following recent work on the performance of LoRA, <a href="#ref_schulman_lora" class="cite"></a>, we fine-tuned the UNet using a LoRA adapter to keep training lightweight and isolate learned behavior to
 					a small set of parameters. This was essential for iteration speed across both RL and SFT.
 				</li>
 			</ol>
@@ -1235,7 +1234,7 @@
 					</tr>
 					<tr>
 						<td style="padding: 10px;">Train dataset size</td>
-						<td style="padding: 10px; text-align: center;">256 - 1028 (larger improves validation, slower reward
+						<td style="padding: 10px; text-align: center;">256 - 1024 (larger improves validation, slower reward
 							climb)</td>
 						<td style="padding: 10px; text-align: center;">Full train split used for reported runs</td>
 					</tr>
@@ -1331,7 +1330,7 @@
 
 			<p>
 				RL and SFT improve classification accuracy over an untuned SD +
-				CLIP pipeline. However, a zero-shot clip baseline still
+				CLIP pipeline. However, a zero-shot CLIP baseline still
 				significantly exceeds the performance of all the trained pairs. 
 			</p>
 
@@ -1339,8 +1338,8 @@
 			<h3 id="results_sft">Results: SFT-Trained Model</h3>
 			<p>
 				This model was trained for 30 epochs using the supervised fine-tuning method described above.
-				This model uses empty prompts for the diffusion model, which we discuss below to perform with
-				no meaningful difference from custom prompts.
+				This model uses empty prompts for the diffusion model, which — as we discuss below — perform with
+				no meaningful difference compared to custom prompts.
 			</p>
 		</div>
 		<div class="margin-right-block"></div>
@@ -1505,14 +1504,14 @@
 		<div class="main-content-block">
 
 			<p>
-				The first row shows a series of "good" generations from diffusion model, while the second row shows "bad"
+				The first row shows a series of "good" generations from the diffusion model, while the second row shows "bad"
 				generations that lead to misclassifications from the same model.
 				The "good" generations show some promising behavior, such as a blurring of the background which enhances
 				the camouflaged object.
 				This is apparent in the frog and spider image pairs, where the background is noticeably blurred relative
 				to the camouflaged object.
-				The grasshopper's background is initially blurred, but the diffusion model seems to do additionally blend
-				and simplify the background colors.
+				The grasshopper's background is initially blurred, but the diffusion model additionally blends
+				and simplifies the background colors.
 			</p>
 			<p>
 				In each image pair of the "bad" generations, the diffusion model seems to misidentify the
@@ -1563,7 +1562,7 @@
 				We also compared performance across different prompt
 				strategies. Figure 8 shows validation loss and accuracy curves for models trained with
 				custom prompts ("De-camouflage the animal", "Increase edge sharpness and contrast",
-				"Enhance visibility of camouflaged animal") versus the no-prompt baseline. Despite
+				"Enhance the visibility of the camouflaged animal") versus the no-prompt baseline. Despite
 				the semantic differences in prompt wording, all custom prompts performed similarly to
 				each other and showed no meaningful improvement over the no-prompt condition.		
 			</p>
@@ -1721,7 +1720,7 @@
 	<div class="content-margin-container" id="results_cifar">
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
-			<h2>Corruption Task (Preliminary)</h2>
+			<h2 id="results_cifar">Corruption Task (Preliminary)</h2>
 			We began extending our pipeline to the corruption task (CIFAR-10-C and ImageNet-C) but were not able
 			to obtain stable or interpretable generations within the project
 			timeline. Across the two hyperparameter configurations we tested, the
@@ -1750,7 +1749,7 @@
 			<p>
 				On the COD10K task, our SFT and RL-trained generative models
 				achieve 25.32% and 14.51% top-1 accuracy, respectively. While
-				this falls short of the 44.87% CLIP baseline, both represent a
+				this falls short of the 44.57% CLIP baseline, both represent a
 				significant improvement over the untrained BASE SD + CLIP
 				combination, with SFT more than doubling its 11.40% accuracy.
 			</p>
@@ -1814,9 +1813,10 @@
 							high <code>guidance_scale</code> using the ground-truth label (ORACLE), then
 							gradually annealing the guidance to transition the model from prompt-dependence
 							to autonomous detection.</li>
-						<li><strong>New Tasks:</strong> Applying this generative-classification approach
-							to other domains, such as classifying partial sketches by generating the complete
-							scene.</li>
+						<li><strong>New Tasks:</strong> Applying this
+						generative-classification approach to other domains,
+						such as finishing the corruption task, or classifying
+						partial drawings by generating the complete scene.</li>
 					</ul>
 			</p>
 		</div>
@@ -1830,8 +1830,8 @@
 			<p>
 				Our investigation yields a negative result: employing a
 				diffusion prior for semantic denoising fails to improve
-				zero-shot classification performance on camouflaged or corrupted
-				data.
+				zero-shot classification performance on camouflaged data and, in
+				preliminary experiments, on corrupted data.
 			</p>
 			<p>
 				While Stable Diffusion adapted with both supervised fine-tuning
@@ -1839,7 +1839,7 @@
 				generator, the inherent stochasticity of the diffusion process
 				distracts from the final goal of improving classification. This
 				results in the hallucination of new features rather than the
-				pronounciation of existing ones. When weighed against the
+				enhancement of existing ones. When weighed against the
 				substantial computational overhead of iterative denoising, this
 				accuracy-corruption tradeoff renders the approach ineffective
 				compared to standard discriminative baselines (or more direct
