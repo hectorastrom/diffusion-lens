@@ -428,7 +428,7 @@
 				<a href="#methods_imageddpo" style="font-size: 14px; margin-left: 15px;">ImageDDPO</a><br />
 				<a href="#methods_rl" style="font-size: 14px; margin-left: 15px;">RL Methods</a><br />
 				<a href="#methods_design" style="font-size: 14px; margin-left: 15px;">Design Choices</a><br />
-				<a href="#methods_sft" style="font-size: 14px; margin-left: 15px;">Supervised Fine-Tuning (Kevin)</a><br />
+				<a href="#methods_sft" style="font-size: 14px; margin-left: 15px;">Supervised Fine-Tuning</a><br />
 				<a href="#methods_benchmarking" style="font-size: 14px; margin-left: 15px;">Evaluation</a><br /><br />
 				<a href="#results" style="font-size: 16px">Results</a><br />
 				<a href="#results_camouflage" style="font-size: 14px; margin-left: 15px;">Camouflage Task</a><br />
@@ -452,7 +452,7 @@
 	<div class="content-margin-container" id="intro">
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
-			<h1>Introduction (Hector)</h1>
+			<h1>Introduction</h1>
 			Since the emergence of Denoising Diffusion Probabilistic Models
 			(DDPMs), generative vision has evolved from simple synthesis to
 			precise, instructional editing <a href="#ref_ho" class="cite"></a> <a href="#ref_ho_cfg" class="cite"></a>. Models like
@@ -506,7 +506,8 @@
 			completed COD10K experiments — and for preliminary CIFAR-10-C runs
 			that failed to yield stable improvements — generative semantic
 			completion is an ineffective approach for improving robustness to
-			visually degraded inputs compared to standard classifier baselines.
+			visually degraded inputs compared to standard classifier baselines
+			on our setup (SD 1.5 + LoRA + CLIP, COD10K).
 
 			<br><br>
 			All code for this experiement is available <a
@@ -522,11 +523,11 @@
 	<div class="content-margin-container" id="preliminaries">
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
-			<h1>Preliminaries (Kevin + Hector)</h1>
+			<h1>Preliminaries</h1>
 			<!-- NOTE: Merging related work into this section; just cite a lot -->
-			<h2 id="preliminaries_diffusion">Diffusion (Kevin)</h2>
+			<h2 id="preliminaries_diffusion">Diffusion</h2>
 			<p>
-			In this work, we adopt <strong>conditional diffusion probabilistic models</strong>, which define a distribution
+			In this work, we adopt <strong>conditional diffusion probabilistic models</strong>,
 			<a href="#ref_sohldickstein" class="cite"></a> <a href="#ref_ho" class="cite"></a>, which define a distribution
 				\( p(x_0 | c) \) over data samples \( x_0 \) given an associated context \( c \).
 				These models operate by introducing a forward noising process
@@ -569,7 +570,7 @@
 			</p>
 
 			<h2 id="preliminaries_pg">Reinforcement Learning and Policy Gradient
-			Methods (Hector)</h2>
+			Methods</h2>
 			This work also explores the use of reinforcement learning to
 			optimize the diffusion model via the DDPO algorithm, enabling
 			optimization around a hypothetical black box classifier. 
@@ -619,7 +620,7 @@
 			allowed policy updates on each optimization step <a
 			href="#ref_schulman_ppo" class="cite"></a>.
 
-			<h2 id="preliminaries_ddpo">DDPOTrainer (Hector)</h2>
+			<h2 id="preliminaries_ddpo">DDPOTrainer</h2>
 			<strong>DDPO</strong> <a href="#ref_black" class="cite"></a> frames
 			the diffusion model as an agent in an environment, where the action
 			is the diffusion step, the state is the partially denoised image +
@@ -662,7 +663,7 @@
 	<div class="content-margin-container" id="task_data">
 		<div class="margin-left-block"></div>
 		<div class="main-content-block">
-			<h1>Task and Dataset Details (Luc)</h1>
+			<h1>Task and Dataset Details</h1>
 			We looked for tasks where diffusion could 'assist' the classifier,
 			by clearing out noise or enhancing the signal.
 			Therefore, we looked for tasks with visually occluded images.
@@ -1070,7 +1071,7 @@
 
 
 
-			<h2 id="methods_sft">Supervised Fine-Tuning (Kevin)</h2>
+			<h2 id="methods_sft">Supervised Fine-Tuning</h2>
 			<p>
 				Our initial approach used RL via DDPO, which provides a general framework for optimizing 
 				diffusion models with respect to arbitrary reward functions, including non-differentiable 
